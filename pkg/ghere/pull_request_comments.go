@@ -11,16 +11,16 @@ type PullRequestComment struct {
 }
 
 type pullRequestCommentsFetcher struct {
-	pullsPath string
-	repo      *Repository
-	prNums    []int
+	pullsPath    string
+	repo         *Repository
+	pullRequests []*PullRequest
 }
 
-func newPullRequestCommentsFetcher(pullsPath string, repo *Repository, prNums []int) *pullRequestCommentsFetcher {
+func newPullRequestCommentsFetcher(pullsPath string, repo *Repository, pullRequests []*PullRequest) *pullRequestCommentsFetcher {
 	return &pullRequestCommentsFetcher{
-		pullsPath: pullsPath,
-		repo:      repo,
-		prNums:    prNums,
+		pullsPath:    pullsPath,
+		repo:         repo,
+		pullRequests: pullRequests,
 	}
 }
 

@@ -28,8 +28,24 @@ func (r *Repository) GetName() string {
 	return r.Repository.GetName()
 }
 
+func (r *Repository) GetPath(rootPath string) string {
+	return filepath.Join(rootPath, r.GetOwner(), r.GetName())
+}
+
+func (r *Repository) GetDetailPath(rootPath string) string {
+	return filepath.Join(r.GetPath(rootPath), DETAIL_FILENAME)
+}
+
+func (r *Repository) GetPullRequestsPath(rootPath string) string {
+	return filepath.Join(r.GetPath(rootPath), "pull-requests")
+}
+
+func (r *Repository) GetCodePath(rootPath string) string {
+	return filepath.Join(r.GetPath(rootPath), "code")
+}
+
 type repoFetcher struct {
-	repoPath string
+	rootPath string
 	owner    string
 	name     string
 	repo     *Repository
@@ -37,17 +53,26 @@ type repoFetcher struct {
 
 var _ fetcher = (*repoFetcher)(nil)
 
-func newRepoFetcher(basePath, owner, name string) *repoFetcher {
+func newRepoFetcher(rootPath, owner, name string) *repoFetcher {
 	return &repoFetcher{
-		repoPath: filepath.Join(basePath, owner, name),
+		rootPath: rootPath,
 		owner:    owner,
 		name:     name,
-		repo:     &Repository{},
+		// Fill out the bare minimum information for the GetOwner and GetName
+		// methods to work.
+		repo: &Repository{
+			Repository: &github.Repository{
+				Owner: &github.User{
+					Login: &owner,
+				},
+				Name: &name,
+			},
+		},
 	}
 }
 
 func (rf *repoFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
-	repoFile := filepath.Join(rf.repoPath, DETAIL_FILENAME)
+	repoFile := rf.repo.GetDetailPath(rf.rootPath)
 	if err := readJSONFileOrEmpty(repoFile, rf.repo); err != nil {
 		return nil, err
 	}
@@ -62,12 +87,10 @@ func (rf *repoFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) 
 	if err := writeJSONFile(repoFile, rf.repo, cfg.PrettyJSON); err != nil {
 		return nil, err
 	}
-	fetchers := []fetcher{
-		newCodeFetcher(filepath.Join(rf.repoPath, "code"), rf.repo),
-	}
+	fetchers := []fetcher{newCodeFetcher(rf.rootPath, rf.repo)}
 	if rf.repo.Repository.GetUpdatedAt().After(rf.repo.LastPullRequestsFetch) {
 		fetchers = append(fetchers, newPullRequestsFetcher(
-			filepath.Join(rf.repoPath, "pull-requests"),
+			rf.rootPath,
 			rf.repo,
 		))
 	}
