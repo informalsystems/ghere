@@ -12,8 +12,10 @@ func fetchRecursively(ctx context.Context, cfg *FetchConfig, fetchers []fetcher,
 		if err != nil {
 			return err
 		}
-		if err := fetchRecursively(ctx, cfg, subFetchers, log); err != nil {
-			return err
+		if len(subFetchers) > 0 {
+			if err := fetchRecursively(ctx, cfg, subFetchers, log); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

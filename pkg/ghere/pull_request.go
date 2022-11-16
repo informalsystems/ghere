@@ -18,25 +18,12 @@ type PullRequest struct {
 }
 
 // GetNumber is a shortcut for accessing the inner `PullRequest.GetNumber()`
-// call.
+// method.
 func (pr *PullRequest) GetNumber() int {
 	return pr.PullRequest.GetNumber()
 }
 
-// GetPath returns the path of this pull request's folder relative to the
-// repository's pull requests folder.
-func (pr *PullRequest) GetPath(prsPath string) string {
-	return filepath.Join(prsPath, fmt.Sprintf("%.6d", pr.GetNumber()))
-}
-
-func (pr *PullRequest) GetDetailsPath(prsPath string) string {
-	return filepath.Join(pr.GetPath(prsPath), DETAIL_FILENAME)
-}
-
-func (pr *PullRequest) GetReviewsPath(prsPath string) string {
-	return filepath.Join(pr.GetPath(prsPath), "reviews")
-}
-
+// pullRequestsFetcher fetches pull requests for a specific repository.
 type pullRequestsFetcher struct {
 	rootPath string
 	repo     *Repository
@@ -51,12 +38,15 @@ func newPullRequestsFetcher(rootPath string, repo *Repository) *pullRequestsFetc
 
 func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
 	log.Info("Fetching pull requests for repository", "repo", pf.repo.String())
-	pattern := filepath.Join(pf.repo.GetPullRequestsPath(pf.rootPath), "*", DETAIL_FILENAME)
+	prsPath := repoPullRequestsPath(pf.rootPath, pf.repo.GetOwner(), pf.repo.GetName())
+	pattern := filepath.Join(prsPath, "*", DETAIL_FILENAME)
 	startPage, err := paginatedItemsStartPage(pattern, func(fn string) (bool, error) {
 		pr := &PullRequest{}
 		if err := readJSONFile(fn, pr); err != nil {
 			return false, err
 		}
+		// This pull request is outdated if we never fetched its details, or if
+		// we last fetched it before the repository was last updated.
 		return pf.repo.Repository.GetUpdatedAt().After(pr.LastDetailFetch), nil
 	})
 	if err != nil {
@@ -64,7 +54,7 @@ func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 	}
 	err = rateLimitedPaginated(startPage, log, func(pg int) (res *github.Response, done bool, err error) {
 		var pulls []*github.PullRequest
-		log.Info("Fetching page of pull requests", "page", pg)
+		log.Info("Fetching page of pull requests", "repo", pf.repo.String(), "page", pg)
 		pulls, res, err = cfg.Client.PullRequests.List(ctx, pf.repo.GetOwner(), pf.repo.GetName(), &github.PullRequestListOptions{
 			State:     "all",
 			Sort:      "created",
@@ -81,7 +71,7 @@ func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 			pr := &PullRequest{
 				PullRequest: pull,
 			}
-			prPath := filepath.Join(pr.GetDetailsPath(pf.rootPath), DETAIL_FILENAME)
+			prPath := pullRequestDetailPath(pf.rootPath, pf.repo.GetOwner(), pf.repo.GetName(), pull.GetNumber())
 			if err = readJSONFileOrEmpty(prPath, pr); err != nil {
 				return
 			}
@@ -107,7 +97,7 @@ func (pf *pullRequestsFetcher) makeReviewsAndCommentsFetchers(log Logger) ([]fet
 	// Pull requests whose reviews and comments must be fetched.
 	fetchReviews := []*PullRequest{}
 	fetchComments := []*PullRequest{}
-	prsPath := pf.repo.GetPullRequestsPath(pf.rootPath)
+	prsPath := repoPullRequestsPath(pf.rootPath, pf.repo.GetOwner(), pf.repo.GetName())
 	pattern := filepath.Join(prsPath, "*", DETAIL_FILENAME)
 	pullRequestDetailsFiles, err := filepath.Glob(pattern)
 	if err != nil {
@@ -129,10 +119,10 @@ func (pf *pullRequestsFetcher) makeReviewsAndCommentsFetchers(log Logger) ([]fet
 
 	fetchers := []fetcher{}
 	if len(fetchReviews) > 0 {
-		fetchers = append(fetchers, newPullRequestReviewsFetcher(prsPath, pf.repo, fetchReviews))
+		fetchers = append(fetchers, newPullRequestReviewsFetcher(pf.rootPath, pf.repo, fetchReviews))
 	}
 	if len(fetchComments) > 0 {
-		fetchers = append(fetchers, newPullRequestCommentsFetcher(prsPath, pf.repo, fetchComments))
+		fetchers = append(fetchers, newPullRequestCommentsFetcher(pf.rootPath, pf.repo, fetchComments))
 	}
 
 	return fetchers, nil

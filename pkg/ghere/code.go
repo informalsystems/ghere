@@ -24,7 +24,7 @@ func (cf *codeFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) 
 	if len(repo.GetSSHURL()) == 0 {
 		return nil, fmt.Errorf("repository %s is missing its SSH URL", repo)
 	}
-	codePath := cf.repo.GetCodePath(cf.rootPath)
+	codePath := repoCodePath(cf.rootPath, cf.repo.GetOwner(), cf.repo.GetName())
 	log.Info("Cloning/updating code repository from GitHub", "repo", repo.GetSSHURL(), "dest", codePath)
 	if err := cloneOrUpdateRepository(ctx, codePath, repo.GetSSHURL(), cfg.SSHPrivKeyFile, cfg.SSHPrivKeyFilePassword); err != nil {
 		return nil, err

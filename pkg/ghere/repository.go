@@ -2,7 +2,6 @@ package ghere
 
 import (
 	"context"
-	"path/filepath"
 	"time"
 
 	"github.com/google/go-github/v48/github"
@@ -28,22 +27,6 @@ func (r *Repository) GetName() string {
 	return r.Repository.GetName()
 }
 
-func (r *Repository) GetPath(rootPath string) string {
-	return filepath.Join(rootPath, r.GetOwner(), r.GetName())
-}
-
-func (r *Repository) GetDetailPath(rootPath string) string {
-	return filepath.Join(r.GetPath(rootPath), DETAIL_FILENAME)
-}
-
-func (r *Repository) GetPullRequestsPath(rootPath string) string {
-	return filepath.Join(r.GetPath(rootPath), "pull-requests")
-}
-
-func (r *Repository) GetCodePath(rootPath string) string {
-	return filepath.Join(r.GetPath(rootPath), "code")
-}
-
 type repoFetcher struct {
 	rootPath string
 	owner    string
@@ -58,22 +41,13 @@ func newRepoFetcher(rootPath, owner, name string) *repoFetcher {
 		rootPath: rootPath,
 		owner:    owner,
 		name:     name,
-		// Fill out the bare minimum information for the GetOwner and GetName
-		// methods to work.
-		repo: &Repository{
-			Repository: &github.Repository{
-				Owner: &github.User{
-					Login: &owner,
-				},
-				Name: &name,
-			},
-		},
+		repo:     &Repository{},
 	}
 }
 
 func (rf *repoFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
-	repoFile := rf.repo.GetDetailPath(rf.rootPath)
-	if err := readJSONFileOrEmpty(repoFile, rf.repo); err != nil {
+	detailFile := repoDetailPath(rf.rootPath, rf.owner, rf.name)
+	if err := readJSONFileOrEmpty(detailFile, rf.repo); err != nil {
 		return nil, err
 	}
 	err := rateLimited(log, func() (res *github.Response, err error) {
@@ -84,7 +58,7 @@ func (rf *repoFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) 
 		return nil, err
 	}
 	rf.repo.LastDetailFetch = time.Now()
-	if err := writeJSONFile(repoFile, rf.repo, cfg.PrettyJSON); err != nil {
+	if err := writeJSONFile(detailFile, rf.repo, cfg.PrettyJSON); err != nil {
 		return nil, err
 	}
 	fetchers := []fetcher{newCodeFetcher(rf.rootPath, rf.repo)}
