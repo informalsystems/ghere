@@ -21,6 +21,17 @@ make install
 See `ghere --help` for details.
 
 ```bash
+# Set your GitHub personal access token to raise rate limits
+# See https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting
+# Note the space before the command - this prevents the shell from saving it
+# in your history.
+ export GITHUB_TOKEN="..."
+
+# Set your SSH key's password (if any). This allows ghere to automatically pull
+# Git repositories while authenticating you via SSH. Again, note the space
+# before the command to prevent the shell from saving it to your history.
+ export SSH_PRIVKEY_PASSWORD="..."
+
 # Initialize an empty local collection of repositories.
 ghere init
 
