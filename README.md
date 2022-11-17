@@ -5,6 +5,17 @@ machine. Pronounced "gear".
 
 **NB: This is still a work-in-progress. Please expect substantial changes.**
 
+## Requirements
+
+* Go 1.19+
+
+## Installation
+
+```bash
+# First clone this repository. Then from the root of the repository:
+make install
+```
+
 ## Usage
 
 ```bash
