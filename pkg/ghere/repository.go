@@ -2,6 +2,7 @@ package ghere
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/go-github/v48/github"
@@ -50,6 +51,7 @@ func (rf *repoFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) 
 	if err := readJSONFileOrEmpty(detailFile, rf.repo); err != nil {
 		return nil, err
 	}
+	log.Info("Fetching repository details", "repo", fmt.Sprintf("%s/%s", rf.owner, rf.name))
 	err := rateLimited(log, func() (res *github.Response, err error) {
 		rf.repo.Repository, res, err = cfg.Client.Repositories.Get(ctx, rf.owner, rf.name)
 		return

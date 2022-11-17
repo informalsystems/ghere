@@ -48,9 +48,13 @@ func pullRequestReviewDetailPath(rootPath, owner, name string, prNum int, review
 }
 
 func pullRequestCommentPath(rootPath, owner, name string, prNum int, commentID int64) string {
-	return filepath.Join(pullRequestCommentsPath(rootPath, owner, name, prNum), fmt.Sprintf("%d", commentID))
+	return filepath.Join(pullRequestCommentsPath(rootPath, owner, name, prNum), fmt.Sprintf("%d.json", commentID))
+}
+
+func reviewCommentsPath(rootPath, owner, name string, prNum int, reviewID int64) string {
+	return filepath.Join(pullRequestReviewPath(rootPath, owner, name, prNum, reviewID), "comments")
 }
 
 func reviewCommentPath(rootPath, owner, name string, prNum int, reviewID, commentID int64) string {
-	return filepath.Join(pullRequestReviewPath(rootPath, owner, name, prNum, reviewID), fmt.Sprintf("%d.json", commentID))
+	return filepath.Join(reviewCommentsPath(rootPath, owner, name, prNum, reviewID), fmt.Sprintf("%d.json", commentID))
 }

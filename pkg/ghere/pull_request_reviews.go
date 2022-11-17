@@ -34,7 +34,7 @@ func newPullRequestReviewsFetcher(rootPath string, repo *Repository, pullRequest
 
 func (rf *pullRequestReviewsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
 	for _, pr := range rf.pullRequests {
-		log.Info("Fetching pull request reviews", "pr", pr.GetNumber())
+		log.Info("Fetching pull request reviews", "repo", rf.repo.String(), "pr", pr.GetNumber())
 		prReviewsPath := pullRequestReviewsPath(rf.rootPath, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber())
 		pattern := filepath.Join(prReviewsPath, "*", DETAIL_FILENAME)
 		startPage, err := paginatedItemsStartPage(pattern, func(fn string) (bool, error) {
@@ -53,7 +53,7 @@ func (rf *pullRequestReviewsFetcher) fetch(ctx context.Context, cfg *FetchConfig
 		err = rateLimitedPaginated(startPage, log, func(pg int) (res *github.Response, done bool, err error) {
 			var reviews []*github.PullRequestReview
 
-			log.Debug("Fetching page of pull request reviews", "pr", pr.GetNumber(), "page", pg)
+			log.Debug("Fetching page of pull request reviews", "repo", rf.repo.String(), "pr", pr.GetNumber(), "page", pg)
 			// https://docs.github.com/en/rest/pulls/reviews#list-reviews-for-a-pull-request
 			reviews, res, err = cfg.Client.PullRequests.ListReviews(ctx, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber(), &github.ListOptions{
 				Page:    pg,

@@ -30,6 +30,7 @@ func newPullRequestCommentsFetcher(rootPath string, repo *Repository, pullReques
 
 func (cf *pullRequestCommentsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
 	for _, pr := range cf.pullRequests {
+		log.Info("Fetching pull request comments", "repo", cf.repo.String(), "pr", pr.GetNumber())
 		err := rateLimitedPaginated(1, log, func(pg int) (res *github.Response, done bool, err error) {
 			var comments []*github.PullRequestComment
 			comments, res, err = cfg.Client.PullRequests.ListComments(
@@ -102,6 +103,7 @@ func newPullRequestReviewCommentsFetcher(rootPath string, repo *Repository, revi
 
 func (cf *pullRequestReviewCommentsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
 	for _, review := range cf.reviews {
+		log.Info("Fetching pull request review comments", "repo", cf.repo.String(), "pr", review.PullRequestNumber, "reviewID", review.Review.GetID())
 		// There shouldn't really be that many review comments on each review,
 		// so fetching them from page 1 should be relatively optimal.
 		err := rateLimitedPaginated(1, log, func(pg int) (res *github.Response, done bool, err error) {
