@@ -47,43 +47,49 @@ func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 		if err := readJSONFile(fn, pr); err != nil {
 			return false, fmt.Errorf("failed to read pull request detail file %s: %v", fn, err)
 		}
-		// This pull request is outdated if we never fetched its details, or if
-		// we last fetched it before the repository was last updated.
-		return pf.repo.Repository.GetUpdatedAt().After(pr.LastDetailFetch), nil
+		repoUpdatedRecently := pf.repo.Repository.GetUpdatedAt().After(pr.LastDetailFetch)
+		fetchedMoreThan24hAgo := time.Since(pr.LastDetailFetch) > 24*time.Hour
+		return repoUpdatedRecently && fetchedMoreThan24hAgo, nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	err = rateLimitedPaginated(startPage, log, func(pg int) (res *github.Response, done bool, err error) {
-		var pulls []*github.PullRequest
-		log.Info("Fetching page of pull requests", "repo", pf.repo.String(), "page", pg)
-		pulls, res, err = cfg.Client.PullRequests.List(ctx, pf.repo.GetOwner(), pf.repo.GetName(), &github.PullRequestListOptions{
-			State:     "all",
-			Sort:      "created",
-			Direction: "asc",
-			ListOptions: github.ListOptions{
-				Page:    pg,
-				PerPage: DEFAULT_PER_PAGE,
-			},
-		})
-		if err != nil {
+	err = rateLimitedPaginated(
+		ctx,
+		startPage,
+		cfg.RequestRetries,
+		cfg.RequestTimeout,
+		log,
+		func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
+			var pulls []*github.PullRequest
+			log.Info("Fetching page of pull requests", "repo", pf.repo.String(), "page", pg)
+			pulls, res, err = cfg.Client.PullRequests.List(cx, pf.repo.GetOwner(), pf.repo.GetName(), &github.PullRequestListOptions{
+				State:     "all",
+				Sort:      "created",
+				Direction: "asc",
+				ListOptions: github.ListOptions{
+					Page:    pg,
+					PerPage: DEFAULT_PER_PAGE,
+				},
+			})
+			if err != nil {
+				return
+			}
+			for _, ghPull := range pulls {
+				pull := &PullRequest{}
+				prPath := pullRequestDetailPath(pf.rootPath, pf.repo.GetOwner(), pf.repo.GetName(), ghPull.GetNumber())
+				if err = readJSONFileOrEmpty(prPath, pull); err != nil {
+					return
+				}
+				pull.PullRequest = ghPull
+				pull.LastDetailFetch = time.Now()
+				if err = writeJSONFile(prPath, pull, cfg.PrettyJSON); err != nil {
+					return
+				}
+			}
+			done = len(pulls) < DEFAULT_PER_PAGE
 			return
-		}
-		for _, ghPull := range pulls {
-			pull := &PullRequest{}
-			prPath := pullRequestDetailPath(pf.rootPath, pf.repo.GetOwner(), pf.repo.GetName(), ghPull.GetNumber())
-			if err = readJSONFileOrEmpty(prPath, pull); err != nil {
-				return
-			}
-			pull.PullRequest = ghPull
-			pull.LastDetailFetch = time.Now()
-			if err = writeJSONFile(prPath, pull, cfg.PrettyJSON); err != nil {
-				return
-			}
-		}
-		done = len(pulls) < DEFAULT_PER_PAGE
-		return
-	})
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +99,7 @@ func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 }
 
 func (pf *pullRequestsFetcher) makeReviewsAndCommentsFetchers(log Logger) ([]fetcher, error) {
-	log.Debug("Computing which pull requests' reviews and comments should be fetched", "repo", pf.repo.String())
+	log.Info("Computing which pull requests' reviews and comments should be fetched", "repo", pf.repo.String())
 	// Pull requests whose reviews and comments must be fetched.
 	fetchReviews := []*PullRequest{}
 	fetchComments := []*PullRequest{}

@@ -20,6 +20,7 @@ type FetchConfig struct {
 	SSHPrivKeyFile         string
 	SSHPrivKeyFilePassword string
 	Concurrency            int
+	RequestRetries         int
 	RequestTimeout         time.Duration
 	GitTimeout             time.Duration
 	PrettyJSON             bool

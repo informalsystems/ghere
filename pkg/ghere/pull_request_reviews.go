@@ -50,38 +50,44 @@ func (rf *pullRequestReviewsFetcher) fetch(ctx context.Context, cfg *FetchConfig
 			return nil, err
 		}
 
-		err = rateLimitedPaginated(startPage, log, func(pg int) (res *github.Response, done bool, err error) {
-			var reviews []*github.PullRequestReview
+		err = rateLimitedPaginated(
+			ctx,
+			startPage,
+			cfg.RequestRetries,
+			cfg.RequestTimeout,
+			log,
+			func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
+				var reviews []*github.PullRequestReview
 
-			log.Debug("Fetching page of pull request reviews", "repo", rf.repo.String(), "pr", pr.GetNumber(), "page", pg)
-			// https://docs.github.com/en/rest/pulls/reviews#list-reviews-for-a-pull-request
-			reviews, res, err = cfg.Client.PullRequests.ListReviews(ctx, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber(), &github.ListOptions{
-				Page:    pg,
-				PerPage: DEFAULT_PER_PAGE,
-			})
-			if err != nil {
+				log.Debug("Fetching page of pull request reviews", "repo", rf.repo.String(), "pr", pr.GetNumber(), "page", pg)
+				// https://docs.github.com/en/rest/pulls/reviews#list-reviews-for-a-pull-request
+				reviews, res, err = cfg.Client.PullRequests.ListReviews(cx, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber(), &github.ListOptions{
+					Page:    pg,
+					PerPage: DEFAULT_PER_PAGE,
+				})
+				if err != nil {
+					return
+				}
+				for _, review := range reviews {
+					rev := &PullRequestReview{
+						Review: review,
+					}
+					revPath := pullRequestReviewDetailPath(rf.rootPath, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber(), review.GetID())
+					if err = readJSONFileOrEmpty(revPath, rev); err != nil {
+						err = fmt.Errorf("failed to read pull request review detail file %s: %v", revPath, err)
+						return
+					}
+					rev.Review = review
+					rev.PullRequestNumber = pr.GetNumber()
+					rev.LastDetailFetch = time.Now()
+					if err = writeJSONFile(revPath, rev, cfg.PrettyJSON); err != nil {
+						err = fmt.Errorf("failed to write pull request review detail file %s: %v", revPath, err)
+						return
+					}
+				}
+				done = len(reviews) < DEFAULT_PER_PAGE
 				return
-			}
-			for _, review := range reviews {
-				rev := &PullRequestReview{
-					Review: review,
-				}
-				revPath := pullRequestReviewDetailPath(rf.rootPath, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber(), review.GetID())
-				if err = readJSONFileOrEmpty(revPath, rev); err != nil {
-					err = fmt.Errorf("failed to read pull request review detail file %s: %v", revPath, err)
-					return
-				}
-				rev.Review = review
-				rev.PullRequestNumber = pr.GetNumber()
-				rev.LastDetailFetch = time.Now()
-				if err = writeJSONFile(revPath, rev, cfg.PrettyJSON); err != nil {
-					err = fmt.Errorf("failed to write pull request review detail file %s: %v", revPath, err)
-					return
-				}
-			}
-			done = len(reviews) < DEFAULT_PER_PAGE
-			return
-		})
+			})
 		if err != nil {
 			return nil, err
 		}

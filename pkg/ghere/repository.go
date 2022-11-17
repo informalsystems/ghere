@@ -52,10 +52,15 @@ func (rf *repoFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) 
 		return nil, err
 	}
 	log.Info("Fetching repository details", "repo", fmt.Sprintf("%s/%s", rf.owner, rf.name))
-	err := rateLimited(log, func() (res *github.Response, err error) {
-		rf.repo.Repository, res, err = cfg.Client.Repositories.Get(ctx, rf.owner, rf.name)
-		return
-	})
+	err := rateLimited(
+		ctx,
+		cfg.RequestRetries,
+		cfg.RequestTimeout,
+		log,
+		func(cx context.Context) (res *github.Response, err error) {
+			rf.repo.Repository, res, err = cfg.Client.Repositories.Get(cx, rf.owner, rf.name)
+			return
+		})
 	if err != nil {
 		return nil, err
 	}

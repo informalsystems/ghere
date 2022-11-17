@@ -17,6 +17,7 @@ type fetchCmd struct {
 	*cobra.Command
 
 	privKeyFile string
+	reqRetries  uint
 	reqTimeout  uint
 	gitTimeout  uint
 	pretty      bool
@@ -66,6 +67,7 @@ func newFetchCmd(root *rootCmd) *fetchCmd {
 				Client:                 client,
 				SSHPrivKeyFile:         cmd.privKeyFile,
 				SSHPrivKeyFilePassword: sshPrivKeyPassword,
+				RequestRetries:         int(cmd.reqRetries),
 				RequestTimeout:         time.Duration(cmd.reqTimeout) * time.Second,
 				GitTimeout:             time.Duration(cmd.gitTimeout) * time.Second,
 				PrettyJSON:             cmd.pretty,
@@ -83,6 +85,7 @@ func newFetchCmd(root *rootCmd) *fetchCmd {
 	}
 	defaultPrivKeyPath := filepath.Join(homeDir, ".ssh", "id_rsa")
 	cmd.Flags().StringVar(&cmd.privKeyFile, "priv-key", defaultPrivKeyPath, "path to the private key to use to clone Git repositories")
+	cmd.Flags().UintVar(&cmd.reqRetries, "request-retries", 3, "how many times to retry requests to GitHub that timeout")
 	cmd.Flags().UintVar(&cmd.reqTimeout, "request-timeout", 20, "timeout, in seconds, for each HTTP request")
 	cmd.Flags().UintVar(&cmd.gitTimeout, "git-timeout", 120, "timeout, in seconds, for each Git repository clone/pull operation")
 	cmd.Flags().BoolVar(&cmd.pretty, "pretty", false, "output pretty JSON instead of compact JSON")

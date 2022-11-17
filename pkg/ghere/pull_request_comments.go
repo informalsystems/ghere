@@ -31,43 +31,49 @@ func newPullRequestCommentsFetcher(rootPath string, repo *Repository, pullReques
 func (cf *pullRequestCommentsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
 	for _, pr := range cf.pullRequests {
 		log.Info("Fetching pull request comments", "repo", cf.repo.String(), "pr", pr.GetNumber())
-		err := rateLimitedPaginated(1, log, func(pg int) (res *github.Response, done bool, err error) {
-			var comments []*github.PullRequestComment
-			comments, res, err = cfg.Client.PullRequests.ListComments(
-				ctx,
-				cf.repo.GetOwner(),
-				cf.repo.GetName(),
-				pr.GetNumber(),
-				&github.PullRequestListCommentsOptions{
-					Sort:      "created",
-					Direction: "asc",
-					ListOptions: github.ListOptions{
-						Page:    pg,
-						PerPage: DEFAULT_PER_PAGE,
-					},
-				},
-			)
-			if err != nil {
-				return
-			}
-			for _, comment := range comments {
-				c := &PullRequestComment{
-					Comment: comment,
-				}
-				commentPath := pullRequestCommentPath(
-					cf.rootPath,
+		err := rateLimitedPaginated(
+			ctx,
+			1,
+			cfg.RequestRetries,
+			cfg.RequestTimeout,
+			log,
+			func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
+				var comments []*github.PullRequestComment
+				comments, res, err = cfg.Client.PullRequests.ListComments(
+					cx,
 					cf.repo.GetOwner(),
 					cf.repo.GetName(),
 					pr.GetNumber(),
-					comment.GetID(),
+					&github.PullRequestListCommentsOptions{
+						Sort:      "created",
+						Direction: "asc",
+						ListOptions: github.ListOptions{
+							Page:    pg,
+							PerPage: DEFAULT_PER_PAGE,
+						},
+					},
 				)
-				if err = writeJSONFile(commentPath, c, cfg.PrettyJSON); err != nil {
-					err = fmt.Errorf("failed to write pull request comment %s: %v", commentPath, err)
+				if err != nil {
+					return
 				}
-			}
-			done = len(comments) < DEFAULT_PER_PAGE
-			return
-		})
+				for _, comment := range comments {
+					c := &PullRequestComment{
+						Comment: comment,
+					}
+					commentPath := pullRequestCommentPath(
+						cf.rootPath,
+						cf.repo.GetOwner(),
+						cf.repo.GetName(),
+						pr.GetNumber(),
+						comment.GetID(),
+					)
+					if err = writeJSONFile(commentPath, c, cfg.PrettyJSON); err != nil {
+						err = fmt.Errorf("failed to write pull request comment %s: %v", commentPath, err)
+					}
+				}
+				done = len(comments) < DEFAULT_PER_PAGE
+				return
+			})
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch pull request %d comments for repo %s: %v", pr.GetNumber(), cf.repo, err)
 		}
@@ -106,42 +112,48 @@ func (cf *pullRequestReviewCommentsFetcher) fetch(ctx context.Context, cfg *Fetc
 		log.Info("Fetching pull request review comments", "repo", cf.repo.String(), "pr", review.PullRequestNumber, "reviewID", review.Review.GetID())
 		// There shouldn't really be that many review comments on each review,
 		// so fetching them from page 1 should be relatively optimal.
-		err := rateLimitedPaginated(1, log, func(pg int) (res *github.Response, done bool, err error) {
-			var comments []*github.PullRequestComment
-			comments, res, err = cfg.Client.PullRequests.ListReviewComments(
-				ctx,
-				cf.repo.GetOwner(),
-				cf.repo.GetName(),
-				review.PullRequestNumber,
-				review.Review.GetID(),
-				&github.ListOptions{
-					Page:    pg,
-					PerPage: DEFAULT_PER_PAGE,
-				},
-			)
-			if err != nil {
-				return
-			}
-			for _, comment := range comments {
-				c := &PullRequestComment{
-					Comment: comment,
-				}
-				commentPath := reviewCommentPath(
-					cf.rootPath,
+		err := rateLimitedPaginated(
+			ctx,
+			1,
+			cfg.RequestRetries,
+			cfg.RequestTimeout,
+			log,
+			func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
+				var comments []*github.PullRequestComment
+				comments, res, err = cfg.Client.PullRequests.ListReviewComments(
+					cx,
 					cf.repo.GetOwner(),
 					cf.repo.GetName(),
 					review.PullRequestNumber,
 					review.Review.GetID(),
-					comment.GetID(),
+					&github.ListOptions{
+						Page:    pg,
+						PerPage: DEFAULT_PER_PAGE,
+					},
 				)
-				if err = writeJSONFile(commentPath, c, cfg.PrettyJSON); err != nil {
-					err = fmt.Errorf("failed to write review comment file %s: %v", commentPath, err)
+				if err != nil {
 					return
 				}
-			}
-			done = len(comments) < DEFAULT_PER_PAGE
-			return
-		})
+				for _, comment := range comments {
+					c := &PullRequestComment{
+						Comment: comment,
+					}
+					commentPath := reviewCommentPath(
+						cf.rootPath,
+						cf.repo.GetOwner(),
+						cf.repo.GetName(),
+						review.PullRequestNumber,
+						review.Review.GetID(),
+						comment.GetID(),
+					)
+					if err = writeJSONFile(commentPath, c, cfg.PrettyJSON); err != nil {
+						err = fmt.Errorf("failed to write review comment file %s: %v", commentPath, err)
+						return
+					}
+				}
+				done = len(comments) < DEFAULT_PER_PAGE
+				return
+			})
 		if err != nil {
 			return nil, err
 		}

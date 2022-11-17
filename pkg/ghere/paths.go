@@ -70,3 +70,11 @@ func issuePath(rootPath, owner, name string, issueNum int) string {
 func issueDetailPath(rootPath, owner, name string, issueNum int) string {
 	return filepath.Join(issuePath(rootPath, owner, name, issueNum), DETAIL_FILENAME)
 }
+
+func issueCommentsPath(rootPath, owner, name string, issueNum int) string {
+	return filepath.Join(issuePath(rootPath, owner, name, issueNum), "comments")
+}
+
+func issueCommentPath(rootPath, owner, name string, issueNum int, commentID int64) string {
+	return filepath.Join(issueCommentsPath(rootPath, owner, name, issueNum), fmt.Sprintf("%d.json", commentID))
+}
