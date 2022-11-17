@@ -29,6 +29,8 @@ type pullRequestsFetcher struct {
 	repo     *Repository
 }
 
+var _ fetcher = (*pullRequestsFetcher)(nil)
+
 func newPullRequestsFetcher(rootPath string, repo *Repository) *pullRequestsFetcher {
 	return &pullRequestsFetcher{
 		rootPath: rootPath,
@@ -43,7 +45,7 @@ func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 	startPage, err := paginatedItemsStartPage(pattern, func(fn string) (bool, error) {
 		pr := &PullRequest{}
 		if err := readJSONFile(fn, pr); err != nil {
-			return false, err
+			return false, fmt.Errorf("failed to read pull request detail file %s: %v", fn, err)
 		}
 		// This pull request is outdated if we never fetched its details, or if
 		// we last fetched it before the repository was last updated.
@@ -67,17 +69,15 @@ func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 		if err != nil {
 			return
 		}
-		for _, pull := range pulls {
-			pr := &PullRequest{
-				PullRequest: pull,
-			}
-			prPath := pullRequestDetailPath(pf.rootPath, pf.repo.GetOwner(), pf.repo.GetName(), pull.GetNumber())
-			if err = readJSONFileOrEmpty(prPath, pr); err != nil {
+		for _, ghPull := range pulls {
+			pull := &PullRequest{}
+			prPath := pullRequestDetailPath(pf.rootPath, pf.repo.GetOwner(), pf.repo.GetName(), ghPull.GetNumber())
+			if err = readJSONFileOrEmpty(prPath, pull); err != nil {
 				return
 			}
-			pr.PullRequest = pull
-			pr.LastDetailFetch = time.Now()
-			if err = writeJSONFile(prPath, pr, cfg.PrettyJSON); err != nil {
+			pull.PullRequest = ghPull
+			pull.LastDetailFetch = time.Now()
+			if err = writeJSONFile(prPath, pull, cfg.PrettyJSON); err != nil {
 				return
 			}
 		}

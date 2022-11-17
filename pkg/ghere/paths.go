@@ -21,6 +21,10 @@ func repoCodePath(rootPath, owner, name string) string {
 	return filepath.Join(repoPath(rootPath, owner, name), "code")
 }
 
+func repoIssuesPath(rootPath, owner, name string) string {
+	return filepath.Join(repoPath(rootPath, owner, name), "issues")
+}
+
 func pullRequestPath(rootPath, owner, name string, prNum int) string {
 	return filepath.Join(repoPullRequestsPath(rootPath, owner, name), fmt.Sprintf("%.6d", prNum))
 }
@@ -57,4 +61,12 @@ func reviewCommentsPath(rootPath, owner, name string, prNum int, reviewID int64)
 
 func reviewCommentPath(rootPath, owner, name string, prNum int, reviewID, commentID int64) string {
 	return filepath.Join(reviewCommentsPath(rootPath, owner, name, prNum, reviewID), fmt.Sprintf("%d.json", commentID))
+}
+
+func issuePath(rootPath, owner, name string, issueNum int) string {
+	return filepath.Join(repoIssuesPath(rootPath, owner, name), fmt.Sprintf("%.6d", issueNum))
+}
+
+func issueDetailPath(rootPath, owner, name string, issueNum int) string {
+	return filepath.Join(issuePath(rootPath, owner, name, issueNum), DETAIL_FILENAME)
 }

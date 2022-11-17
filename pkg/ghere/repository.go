@@ -70,5 +70,11 @@ func (rf *repoFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) 
 			rf.repo,
 		))
 	}
+	if rf.repo.Repository.GetUpdatedAt().After(rf.repo.LastIssuesFetch) {
+		fetchers = append(fetchers, newIssuesFetcher(
+			rf.rootPath,
+			rf.repo,
+		))
+	}
 	return fetchers, nil
 }
