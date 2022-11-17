@@ -25,6 +25,14 @@ func repoIssuesPath(rootPath, owner, name string) string {
 	return filepath.Join(repoPath(rootPath, owner, name), "issues")
 }
 
+func repoLabelsPath(rootPath, owner, name string) string {
+	return filepath.Join(repoPath(rootPath, owner, name), "labels")
+}
+
+func repoLabelPath(rootPath, owner, name string, labelID int64) string {
+	return filepath.Join(repoLabelsPath(rootPath, owner, name), fmt.Sprintf("%d.json", labelID))
+}
+
 func pullRequestPath(rootPath, owner, name string, prNum int) string {
 	return filepath.Join(repoPullRequestsPath(rootPath, owner, name), fmt.Sprintf("%.6d", prNum))
 }

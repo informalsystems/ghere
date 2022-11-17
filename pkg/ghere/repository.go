@@ -14,6 +14,7 @@ type Repository struct {
 	LastDetailFetch       time.Time `json:"last_detail_fetch"`
 	LastPullRequestsFetch time.Time `json:"last_pull_requests_fetch"`
 	LastIssuesFetch       time.Time `json:"last_issues_fetch"`
+	LastLabelsFetch       time.Time `json:"last_labels_fetch"`
 }
 
 func (r *Repository) String() string {
@@ -69,6 +70,12 @@ func (rf *repoFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) 
 		return nil, err
 	}
 	fetchers := []fetcher{newCodeFetcher(rf.rootPath, rf.repo)}
+	if rf.repo.Repository.GetUpdatedAt().After(rf.repo.LastLabelsFetch) {
+		fetchers = append(fetchers, newLabelsFetcher(
+			rf.rootPath,
+			rf.repo,
+		))
+	}
 	if rf.repo.Repository.GetUpdatedAt().After(rf.repo.LastPullRequestsFetch) {
 		fetchers = append(fetchers, newPullRequestsFetcher(
 			rf.rootPath,
