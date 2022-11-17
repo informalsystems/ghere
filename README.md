@@ -18,6 +18,8 @@ make install
 
 ## Usage
 
+See `ghere --help` for details.
+
 ```bash
 # Initialize an empty local collection of repositories.
 ghere init
@@ -27,6 +29,12 @@ ghere init
 ghere add org/repo
 
 # Fetch the code, metadata, plus all latest issues, pull requests and comments
-# for all configured repositories.
+# for all configured repositories. By default, this does not output pretty JSON.
 ghere fetch
+
+# Fetch the code, but prettifying the JSON before writing it to disk.
+ghere fetch --pretty
+
+# Increase output logging to debug level, and prettify the JSON output.
+ghere fetch -v --pretty
 ```
