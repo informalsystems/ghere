@@ -31,7 +31,10 @@ func LoadOrCreateLocalCollection(configFile string) (*LocalCollection, error) {
 }
 
 func (c *LocalCollection) Save() error {
-	return writeJSONFile(c.configFile, c, true)
+	if err := writeJSONFile(c.configFile, c, true); err != nil {
+		return fmt.Errorf("failed to write collection file: %v", err)
+	}
+	return nil
 }
 
 func (c *LocalCollection) NewFromPath(path string) (*LocalRepository, error) {

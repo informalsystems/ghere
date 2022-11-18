@@ -16,9 +16,40 @@ type Issue struct {
 	LastCommentsFetch time.Time `json:"last_comments_fetch"`
 }
 
+func LoadIssue(rootPath string, repo *Repository, issueNum int, mustExist bool) (*Issue, error) {
+	path := issueDetailPath(rootPath, repo.GetOwner(), repo.GetName(), issueNum)
+	return LoadIssueDirect(path, mustExist)
+}
+
+func LoadIssueDirect(path string, mustExist bool) (*Issue, error) {
+	var err error
+	issue := &Issue{}
+	if mustExist {
+		err = readJSONFile(path, issue)
+	} else {
+		err = readJSONFileOrEmpty(path, issue)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read issue detail file: %v", err)
+	}
+	return issue, nil
+}
+
+func (i *Issue) Save(rootPath string, repo *Repository, prettyJSON bool) error {
+	path := issueDetailPath(rootPath, repo.GetOwner(), repo.GetName(), i.GetNumber())
+	if err := writeJSONFile(path, i, prettyJSON); err != nil {
+		return fmt.Errorf("failed to write issue detail file: %v", err)
+	}
+	return nil
+}
+
 // GetNumber is a shortcut for accessing the inner `Issue.GetNumber()` method.
 func (i *Issue) GetNumber() int {
 	return i.Issue.GetNumber()
+}
+
+func (i *Issue) MustUpdateComments() bool {
+	return !i.Issue.IsPullRequest() && i.Issue.GetUpdatedAt().After(i.LastCommentsFetch)
 }
 
 type issuesFetcher struct {
@@ -40,9 +71,9 @@ func (f *issuesFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger)
 	issuesPath := repoIssuesPath(f.rootPath, f.repo.GetOwner(), f.repo.GetName())
 	pattern := filepath.Join(issuesPath, "*", DETAIL_FILENAME)
 	startPage, err := paginatedItemsStartPage(pattern, func(fn string) (bool, error) {
-		issue := &Issue{}
-		if err := readJSONFile(fn, issue); err != nil {
-			return false, fmt.Errorf("failed to read issue detail file %s: %v", fn, err)
+		issue, err := LoadIssueDirect(fn, true)
+		if err != nil {
+			return false, err
 		}
 		repoUpdatedRecently := f.repo.Repository.GetUpdatedAt().After(issue.LastDetailFetch)
 		fetchedMoreThan24hAgo := time.Since(issue.LastDetailFetch) > 24*time.Hour
@@ -78,16 +109,14 @@ func (f *issuesFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger)
 				return
 			}
 			for _, ghIssue := range issues {
-				issue := &Issue{}
-				idp := issueDetailPath(f.rootPath, f.repo.GetOwner(), f.repo.GetName(), ghIssue.GetNumber())
-				if err = readJSONFileOrEmpty(idp, issue); err != nil {
-					err = fmt.Errorf("failed to read issue detail file %s: %v", idp, err)
+				var issue *Issue
+				issue, err = LoadIssue(f.rootPath, f.repo, ghIssue.GetNumber(), false)
+				if err != nil {
 					return
 				}
 				issue.Issue = ghIssue
 				issue.LastDetailFetch = time.Now()
-				if err = writeJSONFile(idp, issue, cfg.PrettyJSON); err != nil {
-					err = fmt.Errorf("failed to write issue detail file %s: %v", idp, err)
+				if err = issue.Save(f.rootPath, f.repo, cfg.PrettyJSON); err != nil {
 					return
 				}
 			}
@@ -98,6 +127,11 @@ func (f *issuesFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger)
 		return nil, err
 	}
 	log.Info("Fetched all issues' details", "repo", f.repo.String())
+
+	f.repo.LastIssuesFetch = time.Now()
+	if err := f.repo.Save(f.rootPath, cfg.PrettyJSON); err != nil {
+		return nil, err
+	}
 
 	return f.makeCommentsFetcher(log)
 }
@@ -113,11 +147,11 @@ func (f *issuesFetcher) makeCommentsFetcher(log Logger) ([]fetcher, error) {
 	}
 
 	for _, fn := range issueDetailFiles {
-		issue := &Issue{}
-		if err := readJSONFile(fn, issue); err != nil {
+		issue, err := LoadIssueDirect(fn, true)
+		if err != nil {
 			return nil, err
 		}
-		if !issue.Issue.IsPullRequest() && issue.Issue.GetUpdatedAt().After(issue.LastCommentsFetch) {
+		if issue.MustUpdateComments() {
 			fetchComments = append(fetchComments, issue)
 		}
 	}

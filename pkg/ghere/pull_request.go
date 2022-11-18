@@ -17,10 +17,45 @@ type PullRequest struct {
 	LastCommentsFetch time.Time `json:"last_comments_fetch"`
 }
 
+func LoadPullRequest(rootPath string, repo *Repository, prNum int, mustExist bool) (*PullRequest, error) {
+	path := pullRequestDetailPath(rootPath, repo.GetOwner(), repo.GetName(), prNum)
+	return LoadPullRequestDirect(path, mustExist)
+}
+
+func LoadPullRequestDirect(path string, mustExist bool) (*PullRequest, error) {
+	var err error
+	pr := &PullRequest{}
+	if mustExist {
+		err = readJSONFile(path, pr)
+	} else {
+		err = readJSONFileOrEmpty(path, pr)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read pull request detail file: %v", err)
+	}
+	return pr, nil
+}
+
 // GetNumber is a shortcut for accessing the inner `PullRequest.GetNumber()`
 // method.
 func (pr *PullRequest) GetNumber() int {
 	return pr.PullRequest.GetNumber()
+}
+
+func (pr *PullRequest) MustFetchReviews() bool {
+	return pr.PullRequest.GetUpdatedAt().After(pr.LastReviewsFetch)
+}
+
+func (pr *PullRequest) MustFetchComments() bool {
+	return pr.PullRequest.GetUpdatedAt().After(pr.LastCommentsFetch)
+}
+
+func (pr *PullRequest) Save(rootPath string, repo *Repository, prettyJSON bool) error {
+	path := pullRequestDetailPath(rootPath, repo.GetOwner(), repo.GetName(), pr.GetNumber())
+	if err := writeJSONFile(path, pr, prettyJSON); err != nil {
+		return fmt.Errorf("failed to write pull request detail file: %v", err)
+	}
+	return nil
 }
 
 // pullRequestsFetcher fetches pull requests for a specific repository.
@@ -43,9 +78,9 @@ func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 	prsPath := repoPullRequestsPath(pf.rootPath, pf.repo.GetOwner(), pf.repo.GetName())
 	pattern := filepath.Join(prsPath, "*", DETAIL_FILENAME)
 	startPage, err := paginatedItemsStartPage(pattern, func(fn string) (bool, error) {
-		pr := &PullRequest{}
-		if err := readJSONFile(fn, pr); err != nil {
-			return false, fmt.Errorf("failed to read pull request detail file %s: %v", fn, err)
+		pr, err := LoadPullRequestDirect(fn, true)
+		if err != nil {
+			return false, err
 		}
 		repoUpdatedRecently := pf.repo.Repository.GetUpdatedAt().After(pr.LastDetailFetch)
 		fetchedMoreThan24hAgo := time.Since(pr.LastDetailFetch) > 24*time.Hour
@@ -76,14 +111,14 @@ func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 				return
 			}
 			for _, ghPull := range pulls {
-				pull := &PullRequest{}
-				prPath := pullRequestDetailPath(pf.rootPath, pf.repo.GetOwner(), pf.repo.GetName(), ghPull.GetNumber())
-				if err = readJSONFileOrEmpty(prPath, pull); err != nil {
+				var pull *PullRequest
+				pull, err = LoadPullRequest(pf.rootPath, pf.repo, ghPull.GetNumber(), false)
+				if err != nil {
 					return
 				}
 				pull.PullRequest = ghPull
 				pull.LastDetailFetch = time.Now()
-				if err = writeJSONFile(prPath, pull, cfg.PrettyJSON); err != nil {
+				if err = pull.Save(pf.rootPath, pf.repo, cfg.PrettyJSON); err != nil {
 					return
 				}
 			}
@@ -94,6 +129,11 @@ func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 		return nil, err
 	}
 	log.Info("Fetched all pull requests' details", "repo", pf.repo.String())
+
+	pf.repo.LastPullRequestsFetch = time.Now()
+	if err := pf.repo.Save(pf.rootPath, cfg.PrettyJSON); err != nil {
+		return nil, err
+	}
 
 	return pf.makeReviewsAndCommentsFetchers(log)
 }
@@ -111,14 +151,14 @@ func (pf *pullRequestsFetcher) makeReviewsAndCommentsFetchers(log Logger) ([]fet
 	}
 
 	for _, fn := range pullRequestDetailsFiles {
-		pr := &PullRequest{}
-		if err := readJSONFile(fn, pr); err != nil {
-			return nil, fmt.Errorf("failed to read pull request detail file %s: %v", fn, err)
+		pr, err := LoadPullRequestDirect(fn, true)
+		if err != nil {
+			return nil, err
 		}
-		if pr.PullRequest.GetUpdatedAt().After(pr.LastReviewsFetch) {
+		if pr.MustFetchReviews() {
 			fetchReviews = append(fetchReviews, pr)
 		}
-		if pr.PullRequest.GetUpdatedAt().After(pr.LastCommentsFetch) {
+		if pr.MustFetchComments() {
 			fetchComments = append(fetchComments, pr)
 		}
 	}

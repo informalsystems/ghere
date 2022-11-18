@@ -12,6 +12,29 @@ type Label struct {
 	Label *github.Label
 }
 
+func LoadLabel(rootPath string, repo *Repository, labelID int64, mustExist bool) (*Label, error) {
+	var err error
+	label := &Label{}
+	path := repoLabelPath(rootPath, repo.GetOwner(), repo.GetName(), labelID)
+	if mustExist {
+		err = readJSONFile(path, label)
+	} else {
+		err = readJSONFileOrEmpty(path, label)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read repository label file: %v", err)
+	}
+	return label, nil
+}
+
+func (l *Label) Save(rootPath string, repo *Repository, prettyJSON bool) error {
+	path := repoLabelPath(rootPath, repo.GetOwner(), repo.GetName(), l.Label.GetID())
+	if err := writeJSONFile(path, l, prettyJSON); err != nil {
+		return fmt.Errorf("failed to write repository label file: %v", err)
+	}
+	return nil
+}
+
 type labelsFetcher struct {
 	rootPath string
 	repo     *Repository
@@ -53,9 +76,7 @@ func (f *labelsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger)
 				label := &Label{
 					Label: ghLabel,
 				}
-				labelFile := repoLabelPath(f.rootPath, f.repo.GetOwner(), f.repo.GetName(), ghLabel.GetID())
-				if err = writeJSONFile(labelFile, label, cfg.PrettyJSON); err != nil {
-					err = fmt.Errorf("failed to write label file for repository %s: %v", labelFile, err)
+				if err = label.Save(f.rootPath, f.repo, cfg.PrettyJSON); err != nil {
 					return
 				}
 			}
@@ -66,9 +87,8 @@ func (f *labelsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger)
 		return nil, err
 	}
 	f.repo.LastLabelsFetch = time.Now()
-	rdf := repoDetailPath(f.rootPath, f.repo.GetOwner(), f.repo.GetName())
-	if err := writeJSONFile(rdf, f.repo, cfg.PrettyJSON); err != nil {
-		return nil, fmt.Errorf("failed to update last labels fetch time in repository details file %s: %v", rdf, err)
+	if err := f.repo.Save(f.rootPath, cfg.PrettyJSON); err != nil {
+		return nil, err
 	}
 	return nil, nil
 }

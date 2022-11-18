@@ -8,25 +8,23 @@ import (
 	"github.com/google/go-github/v48/github"
 )
 
+type retryResult struct {
+	res *github.Response
+	err error
+}
+
 func retryWithTimeout(ctx context.Context, retries int, retryTimeout time.Duration, log Logger, fn func(cx context.Context) (*github.Response, error)) (*github.Response, error) {
 	for attempt := 0; attempt < retries; attempt++ {
 		attemptCtx, cancelAttempt := context.WithCancel(ctx)
-		resChan := make(chan *github.Response)
-		errChan := make(chan error)
+		resChan := make(chan retryResult)
 		go func() {
 			defer cancelAttempt()
 			res, err := fn(attemptCtx)
-			if err != nil {
-				errChan <- err
-				return
-			}
-			resChan <- res
+			resChan <- retryResult{res, err}
 		}()
 		select {
 		case res := <-resChan:
-			return res, nil
-		case err := <-errChan:
-			return nil, err
+			return res.res, res.err
 		case <-time.After(retryTimeout):
 			log.Warn("Timed out while attempting GitHub request; retrying", "timeout", retryTimeout.String(), "attempt", attempt+1, "retries", retries)
 			cancelAttempt()

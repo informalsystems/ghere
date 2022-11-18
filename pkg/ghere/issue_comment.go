@@ -12,6 +12,33 @@ type IssueComment struct {
 	Comment *github.IssueComment `json:"comment"`
 }
 
+func LoadIssueComment(rootPath string, repo *Repository, issueNum int, commentID int64, mustExist bool) (*IssueComment, error) {
+	path := issueCommentPath(rootPath, repo.GetOwner(), repo.GetName(), issueNum, commentID)
+	return LoadIssueCommentDirect(path, mustExist)
+}
+
+func LoadIssueCommentDirect(path string, mustExist bool) (*IssueComment, error) {
+	var err error
+	comment := &IssueComment{}
+	if mustExist {
+		err = readJSONFile(path, comment)
+	} else {
+		err = readJSONFileOrEmpty(path, comment)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read issue comment file: %v", err)
+	}
+	return comment, nil
+}
+
+func (c *IssueComment) Save(rootPath string, repo *Repository, issueNum int, prettyJSON bool) error {
+	path := issueCommentPath(rootPath, repo.GetOwner(), repo.GetName(), issueNum, c.Comment.GetID())
+	if err := writeJSONFile(path, c, prettyJSON); err != nil {
+		return fmt.Errorf("failed to write issue comment file: %v", err)
+	}
+	return nil
+}
+
 type issueCommentsFetcher struct {
 	rootPath string
 	repo     *Repository
@@ -62,15 +89,7 @@ func (f *issueCommentsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 					comment := &IssueComment{
 						Comment: ghComment,
 					}
-					commentPath := issueCommentPath(
-						f.rootPath,
-						f.repo.GetOwner(),
-						f.repo.GetName(),
-						issue.GetNumber(),
-						ghComment.GetID(),
-					)
-					if err = writeJSONFile(commentPath, comment, cfg.PrettyJSON); err != nil {
-						err = fmt.Errorf("failed to write issue %d for repo %s, comment %s: %v", issue.GetNumber(), f.repo, commentPath, err)
+					if err = comment.Save(f.rootPath, f.repo, issue.GetNumber(), cfg.PrettyJSON); err != nil {
 						return
 					}
 				}
@@ -82,9 +101,8 @@ func (f *issueCommentsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 		}
 
 		issue.LastCommentsFetch = time.Now()
-		idf := issueDetailPath(f.rootPath, f.repo.GetOwner(), f.repo.GetName(), issue.GetNumber())
-		if err := writeJSONFile(idf, issue, cfg.PrettyJSON); err != nil {
-			return nil, fmt.Errorf("failed to update last issue comments fetch time for issue %d in repo %s in %s: %v", issue.GetNumber(), f.repo, idf, err)
+		if err := issue.Save(f.rootPath, f.repo, cfg.PrettyJSON); err != nil {
+			return nil, err
 		}
 	}
 	return nil, nil

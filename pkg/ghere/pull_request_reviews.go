@@ -17,6 +17,38 @@ type PullRequestReview struct {
 	LastCommentsFetch time.Time `json:"last_comments_fetch"`
 }
 
+func LoadPullRequestReview(rootPath string, repo *Repository, prNum int, reviewID int64, mustExist bool) (*PullRequestReview, error) {
+	path := pullRequestReviewDetailPath(rootPath, repo.GetOwner(), repo.GetName(), prNum, reviewID)
+	review, err := LoadPullRequestReviewDirect(path, mustExist)
+	if err != nil {
+		return nil, err
+	}
+	review.PullRequestNumber = prNum
+	return review, nil
+}
+
+func LoadPullRequestReviewDirect(path string, mustExist bool) (*PullRequestReview, error) {
+	var err error
+	review := &PullRequestReview{}
+	if mustExist {
+		err = readJSONFile(path, review)
+	} else {
+		err = readJSONFileOrEmpty(path, review)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read pull request review detail file: %v", err)
+	}
+	return review, nil
+}
+
+func (r *PullRequestReview) Save(rootPath string, repo *Repository, prettyJSON bool) error {
+	path := pullRequestReviewDetailPath(rootPath, repo.GetOwner(), repo.GetName(), r.PullRequestNumber, r.Review.GetID())
+	if err := writeJSONFile(path, r, prettyJSON); err != nil {
+		return fmt.Errorf("failed to write pull request review detail file: %v", err)
+	}
+	return nil
+}
+
 // pullRequestReviewsFetcher fetches reviews for a number of PRs.
 type pullRequestReviewsFetcher struct {
 	rootPath     string
@@ -38,8 +70,8 @@ func (rf *pullRequestReviewsFetcher) fetch(ctx context.Context, cfg *FetchConfig
 		prReviewsPath := pullRequestReviewsPath(rf.rootPath, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber())
 		pattern := filepath.Join(prReviewsPath, "*", DETAIL_FILENAME)
 		startPage, err := paginatedItemsStartPage(pattern, func(fn string) (bool, error) {
-			review := &PullRequestReview{}
-			if err := readJSONFile(fn, review); err != nil {
+			review, err := LoadPullRequestReviewDirect(fn, true)
+			if err != nil {
 				return false, err
 			}
 			// If the pull request was last updated after this review was last
@@ -68,20 +100,16 @@ func (rf *pullRequestReviewsFetcher) fetch(ctx context.Context, cfg *FetchConfig
 				if err != nil {
 					return
 				}
-				for _, review := range reviews {
-					rev := &PullRequestReview{
-						Review: review,
-					}
-					revPath := pullRequestReviewDetailPath(rf.rootPath, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber(), review.GetID())
-					if err = readJSONFileOrEmpty(revPath, rev); err != nil {
-						err = fmt.Errorf("failed to read pull request review detail file %s: %v", revPath, err)
+				for _, ghReview := range reviews {
+					var review *PullRequestReview
+					review, err = LoadPullRequestReview(rf.rootPath, rf.repo, pr.GetNumber(), ghReview.GetID(), false)
+					if err != nil {
 						return
 					}
-					rev.Review = review
-					rev.PullRequestNumber = pr.GetNumber()
-					rev.LastDetailFetch = time.Now()
-					if err = writeJSONFile(revPath, rev, cfg.PrettyJSON); err != nil {
-						err = fmt.Errorf("failed to write pull request review detail file %s: %v", revPath, err)
+					review.Review = ghReview
+					review.PullRequestNumber = pr.GetNumber()
+					review.LastDetailFetch = time.Now()
+					if err = review.Save(rf.rootPath, rf.repo, cfg.PrettyJSON); err != nil {
 						return
 					}
 				}
@@ -93,9 +121,8 @@ func (rf *pullRequestReviewsFetcher) fetch(ctx context.Context, cfg *FetchConfig
 		}
 
 		pr.LastReviewsFetch = time.Now()
-		prDetailPath := pullRequestDetailPath(rf.rootPath, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber())
-		if err := writeJSONFile(prDetailPath, pr, cfg.PrettyJSON); err != nil {
-			return nil, fmt.Errorf("failed to update last reviews fetch time for pull request %s: %v", prDetailPath, err)
+		if err := pr.Save(rf.rootPath, rf.repo, cfg.PrettyJSON); err != nil {
+			return nil, err
 		}
 	}
 	return rf.makeReviewCommentsFetcher(log)
@@ -115,20 +142,21 @@ func (rf *pullRequestReviewsFetcher) makeReviewCommentsFetcher(log Logger) ([]fe
 	}
 
 	for _, prf := range prFiles {
-		pr := &PullRequest{}
-		if err := readJSONFile(prf, pr); err != nil {
-			return nil, fmt.Errorf("failed to read pull request detail file %s: %v", prf, err)
+		pr, err := LoadPullRequestDirect(prf, true)
+		if err != nil {
+			return nil, err
 		}
 		// Now we scan all pull request reviews for this pull request
-		pat := pullRequestReviewsPath(rf.rootPath, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber())
-		reviewFiles, err := filepath.Glob(pattern)
+		prReviewsPath := pullRequestReviewsPath(rf.rootPath, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber())
+		pat := filepath.Join(prReviewsPath, "*", DETAIL_FILENAME)
+		reviewFiles, err := filepath.Glob(pat)
 		if err != nil {
 			return nil, fmt.Errorf("unable to scan for pull request review detail files with pattern %s: %v", pat, err)
 		}
 		for _, fn := range reviewFiles {
-			review := &PullRequestReview{}
-			if err := readJSONFile(fn, review); err != nil {
-				return nil, fmt.Errorf("failed to read pull request review detail file %s: %v", fn, err)
+			review, err := LoadPullRequestReviewDirect(fn, true)
+			if err != nil {
+				return nil, err
 			}
 			if pr.PullRequest.GetUpdatedAt().After(review.LastCommentsFetch) {
 				fetchReviewComments = append(fetchReviewComments, review)

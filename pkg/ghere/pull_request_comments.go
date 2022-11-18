@@ -12,6 +12,72 @@ type PullRequestComment struct {
 	Comment *github.PullRequestComment `json:"comment"`
 }
 
+func LoadPullRequestComment(rootPath string, repo *Repository, prNum int, commentID int64, mustExist bool) (*PullRequestComment, error) {
+	path := pullRequestCommentPath(
+		rootPath,
+		repo.GetOwner(),
+		repo.GetName(),
+		prNum,
+		commentID,
+	)
+	return LoadPullRequestCommentDirect(path, mustExist)
+}
+
+func LoadPullRequestReviewComment(rootPath string, repo *Repository, prNum int, reviewID, commentID int64, mustExist bool) (*PullRequestComment, error) {
+	path := reviewCommentPath(
+		rootPath,
+		repo.GetOwner(),
+		repo.GetName(),
+		prNum,
+		reviewID,
+		commentID,
+	)
+	return LoadPullRequestCommentDirect(path, mustExist)
+}
+
+func LoadPullRequestCommentDirect(path string, mustExist bool) (*PullRequestComment, error) {
+	var err error
+	pr := &PullRequestComment{}
+	if mustExist {
+		err = readJSONFile(path, pr)
+	} else {
+		err = readJSONFileOrEmpty(path, pr)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read pull request comment file: %v", err)
+	}
+	return pr, nil
+}
+
+func (c *PullRequestComment) Save(rootPath string, repo *Repository, prNum int, prettyJSON bool) error {
+	path := pullRequestCommentPath(
+		rootPath,
+		repo.GetOwner(),
+		repo.GetName(),
+		prNum,
+		c.Comment.GetID(),
+	)
+	if err := writeJSONFile(path, c, prettyJSON); err != nil {
+		return fmt.Errorf("failed to write pull request comment file: %v", err)
+	}
+	return nil
+}
+
+func (c *PullRequestComment) SaveForReview(rootPath string, repo *Repository, prNum int, reviewID int64, prettyJSON bool) error {
+	path := reviewCommentPath(
+		rootPath,
+		repo.GetOwner(),
+		repo.GetName(),
+		prNum,
+		reviewID,
+		c.Comment.GetID(),
+	)
+	if err := writeJSONFile(path, c, prettyJSON); err != nil {
+		return fmt.Errorf("failed to write pull request review comment: %v", err)
+	}
+	return nil
+}
+
 // Fetches all comments on pull requests - not just those associated with
 // specific reviews.
 type pullRequestCommentsFetcher struct {
@@ -56,19 +122,12 @@ func (cf *pullRequestCommentsFetcher) fetch(ctx context.Context, cfg *FetchConfi
 				if err != nil {
 					return
 				}
-				for _, comment := range comments {
-					c := &PullRequestComment{
-						Comment: comment,
+				for _, ghComment := range comments {
+					comment := &PullRequestComment{
+						Comment: ghComment,
 					}
-					commentPath := pullRequestCommentPath(
-						cf.rootPath,
-						cf.repo.GetOwner(),
-						cf.repo.GetName(),
-						pr.GetNumber(),
-						comment.GetID(),
-					)
-					if err = writeJSONFile(commentPath, c, cfg.PrettyJSON); err != nil {
-						err = fmt.Errorf("failed to write pull request comment %s: %v", commentPath, err)
+					if err = comment.Save(cf.rootPath, cf.repo, pr.GetNumber(), cfg.PrettyJSON); err != nil {
+						return
 					}
 				}
 				done = len(comments) < DEFAULT_PER_PAGE
@@ -79,16 +138,11 @@ func (cf *pullRequestCommentsFetcher) fetch(ctx context.Context, cfg *FetchConfi
 		}
 
 		pr.LastCommentsFetch = time.Now()
-		prDetailFile := pullRequestDetailPath(
-			cf.rootPath,
-			cf.repo.GetOwner(),
-			cf.repo.GetName(),
-			pr.GetNumber(),
-		)
-		if err := writeJSONFile(prDetailFile, pr, cfg.PrettyJSON); err != nil {
-			return nil, fmt.Errorf("failed to update last comments fetch time for pull request %d for repo %s: %v", pr.GetNumber(), cf.repo, err)
+		if err := pr.Save(cf.rootPath, cf.repo, cfg.PrettyJSON); err != nil {
+			return nil, err
 		}
 	}
+
 	return nil, nil
 }
 
@@ -134,20 +188,11 @@ func (cf *pullRequestReviewCommentsFetcher) fetch(ctx context.Context, cfg *Fetc
 				if err != nil {
 					return
 				}
-				for _, comment := range comments {
-					c := &PullRequestComment{
-						Comment: comment,
+				for _, ghComment := range comments {
+					comment := &PullRequestComment{
+						Comment: ghComment,
 					}
-					commentPath := reviewCommentPath(
-						cf.rootPath,
-						cf.repo.GetOwner(),
-						cf.repo.GetName(),
-						review.PullRequestNumber,
-						review.Review.GetID(),
-						comment.GetID(),
-					)
-					if err = writeJSONFile(commentPath, c, cfg.PrettyJSON); err != nil {
-						err = fmt.Errorf("failed to write review comment file %s: %v", commentPath, err)
+					if err = comment.SaveForReview(cf.rootPath, cf.repo, review.PullRequestNumber, review.Review.GetID(), cfg.PrettyJSON); err != nil {
 						return
 					}
 				}
@@ -159,15 +204,8 @@ func (cf *pullRequestReviewCommentsFetcher) fetch(ctx context.Context, cfg *Fetc
 		}
 
 		review.LastCommentsFetch = time.Now()
-		reviewDetailFile := pullRequestReviewDetailPath(
-			cf.rootPath,
-			cf.repo.GetOwner(),
-			cf.repo.GetName(),
-			review.PullRequestNumber,
-			review.Review.GetID(),
-		)
-		if err := writeJSONFile(reviewDetailFile, review, cfg.PrettyJSON); err != nil {
-			return nil, fmt.Errorf("failed to update last comments fetch time for review %s: %v", reviewDetailFile, err)
+		if err := review.Save(cf.rootPath, cf.repo, cfg.PrettyJSON); err != nil {
+			return nil, err
 		}
 	}
 	return nil, nil
