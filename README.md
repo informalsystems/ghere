@@ -49,3 +49,32 @@ ghere fetch --pretty
 # Increase output logging to debug level, and prettify the JSON output.
 ghere fetch -v --pretty
 ```
+
+## Features
+
+- [ ] Fetch entire organizations
+- [ ] Fetch projects
+- [ ] Fetch teams
+- [x] Fetch individual repositories (public and private, depending on personal
+  access token privileges)
+- [x] Fetch code (Git repository)
+  - [x] Fetch code via SSH with SSH key support
+  - [ ] Fetch code via HTTPS
+- [x] Fetch issues
+  - [x] Fetch issue comments
+- [x] Fetch pull requests
+  - [x] Fetch pull request comments
+  - [x] Fetch pull request reviews
+    - [x] Fetch pull request review comments
+- [ ] Fetch releases
+- [x] Fetch repository labels
+- [ ] Fetch milestones
+- [ ] Fetch wikis
+- [ ] Fetch gists
+- [ ] Fetch related media (e.g. embedded images in issue/pull request
+  descriptions and comments)
+- [x] Handle GitHub rate limiting (when individual rate limits are hit, ghere
+  automatically waits until the rate limit reset time to continue)
+- [x] Handle request retries
+- [x] Incremental update (tries to minimize the number of requests to the GitHub
+  API)
