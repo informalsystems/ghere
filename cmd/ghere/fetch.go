@@ -63,12 +63,12 @@ func newFetchCmd(root *rootCmd) *fetchCmd {
 			)
 			tc := oauth2.NewClient(c.Context(), ts)
 			client := github.NewClient(tc)
+			reqRetries := int(cmd.reqRetries)
+			reqTimeout := time.Duration(cmd.reqTimeout) * time.Second
 			cfg := &ghere.FetchConfig{
-				Client:                 client,
+				Client:                 ghere.NewGitHubClient(client, reqRetries, reqTimeout, log),
 				SSHPrivKeyFile:         cmd.privKeyFile,
 				SSHPrivKeyFilePassword: sshPrivKeyPassword,
-				RequestRetries:         int(cmd.reqRetries),
-				RequestTimeout:         time.Duration(cmd.reqTimeout) * time.Second,
 				GitTimeout:             time.Duration(cmd.gitTimeout) * time.Second,
 				PrettyJSON:             cmd.pretty,
 			}

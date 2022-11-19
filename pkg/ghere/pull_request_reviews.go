@@ -66,7 +66,6 @@ func newPullRequestReviewsFetcher(rootPath string, repo *Repository, pullRequest
 
 func (rf *pullRequestReviewsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
 	for _, pr := range rf.pullRequests {
-		log.Info("Fetching pull request reviews", "repo", rf.repo.String(), "pr", pr.GetNumber())
 		prReviewsPath := pullRequestReviewsPath(rf.rootPath, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber())
 		pattern := filepath.Join(prReviewsPath, "*", DETAIL_FILENAME)
 		startPage, err := paginatedItemsStartPage(pattern, func(fn string) (bool, error) {
@@ -82,44 +81,26 @@ func (rf *pullRequestReviewsFetcher) fetch(ctx context.Context, cfg *FetchConfig
 			return nil, err
 		}
 
-		err = rateLimitedPaginated(
-			ctx,
-			startPage,
-			cfg.RequestRetries,
-			cfg.RequestTimeout,
-			log,
-			func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
-				var reviews []*github.PullRequestReview
-
-				log.Debug("Fetching page of pull request reviews", "repo", rf.repo.String(), "pr", pr.GetNumber(), "page", pg)
-				// https://docs.github.com/en/rest/pulls/reviews#list-reviews-for-a-pull-request
-				reviews, res, err = cfg.Client.PullRequests.ListReviews(cx, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber(), &github.ListOptions{
-					Page:    pg,
-					PerPage: DEFAULT_PER_PAGE,
-				})
+		done := false
+		for page := startPage; !done; page++ {
+			var reviews []*github.PullRequestReview
+			reviews, done, err = cfg.Client.ListPullRequestReviews(ctx, rf.repo.GetOwner(), rf.repo.GetName(), pr.GetNumber(), page)
+			if err != nil {
+				return nil, err
+			}
+			for _, ghReview := range reviews {
+				review, err := LoadPullRequestReview(rf.rootPath, rf.repo, pr.GetNumber(), ghReview.GetID(), false)
 				if err != nil {
-					return
+					return nil, err
 				}
-				for _, ghReview := range reviews {
-					var review *PullRequestReview
-					review, err = LoadPullRequestReview(rf.rootPath, rf.repo, pr.GetNumber(), ghReview.GetID(), false)
-					if err != nil {
-						return
-					}
-					review.Review = ghReview
-					review.PullRequestNumber = pr.GetNumber()
-					review.LastDetailFetch = time.Now()
-					if err = review.Save(rf.rootPath, rf.repo, cfg.PrettyJSON); err != nil {
-						return
-					}
+				review.Review = ghReview
+				review.PullRequestNumber = pr.GetNumber()
+				review.LastDetailFetch = time.Now()
+				if err := review.Save(rf.rootPath, rf.repo, cfg.PrettyJSON); err != nil {
+					return nil, err
 				}
-				done = len(reviews) < DEFAULT_PER_PAGE
-				return
-			})
-		if err != nil {
-			return nil, err
+			}
 		}
-
 		pr.LastReviewsFetch = time.Now()
 		if err := pr.Save(rf.rootPath, rf.repo, cfg.PrettyJSON); err != nil {
 			return nil, err

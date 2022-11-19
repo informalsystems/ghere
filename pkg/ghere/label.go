@@ -50,41 +50,27 @@ func newLabelsFetcher(rootPath string, repo *Repository) *labelsFetcher {
 }
 
 func (f *labelsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
-	log.Info("Fetching labels for repository", "repo", f.repo.String())
-	err := rateLimitedPaginated(
-		ctx,
-		1,
-		cfg.RequestRetries,
-		cfg.RequestTimeout,
-		log,
-		func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
-			var labels []*github.Label
-			labels, res, err = cfg.Client.Issues.ListLabels(
-				cx,
-				f.repo.GetOwner(),
-				f.repo.GetName(),
-				&github.ListOptions{
-					Page:    pg,
-					PerPage: DEFAULT_PER_PAGE,
-				},
-			)
-			if err != nil {
-				err = fmt.Errorf("failed to fetch labels for repository %s: %v", f.repo, err)
-				return
+	var labels []*github.Label
+	var err error
+	done := false
+	for page := 1; !done; page++ {
+		labels, done, err = cfg.Client.ListRepositoryLabels(
+			ctx,
+			f.repo.GetOwner(),
+			f.repo.GetName(),
+			page,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for _, ghLabel := range labels {
+			label := &Label{
+				Label: ghLabel,
 			}
-			for _, ghLabel := range labels {
-				label := &Label{
-					Label: ghLabel,
-				}
-				if err = label.Save(f.rootPath, f.repo, cfg.PrettyJSON); err != nil {
-					return
-				}
+			if err := label.Save(f.rootPath, f.repo, cfg.PrettyJSON); err != nil {
+				return nil, err
 			}
-			done = len(labels) < DEFAULT_PER_PAGE
-			return
-		})
-	if err != nil {
-		return nil, err
+		}
 	}
 	f.repo.LastLabelsFetch = time.Now()
 	if err := f.repo.Save(f.rootPath, cfg.PrettyJSON); err != nil {

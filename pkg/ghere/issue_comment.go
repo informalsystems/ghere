@@ -57,49 +57,29 @@ func newIssueCommentsFetcher(rootPath string, repo *Repository, issues []*Issue)
 
 func (f *issueCommentsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
 	for _, issue := range f.issues {
-		log.Info("Fetching comments for issue", "repo", f.repo.String(), "issue", issue.GetNumber())
-		err := rateLimitedPaginated(
-			ctx,
-			1,
-			cfg.RequestRetries,
-			cfg.RequestTimeout,
-			log,
-			func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
-				var comments []*github.IssueComment
-				sortParam := "created"
-				dirParam := "asc"
-				comments, res, err = cfg.Client.Issues.ListComments(
-					cx,
-					f.repo.GetOwner(),
-					f.repo.GetName(),
-					issue.GetNumber(),
-					&github.IssueListCommentsOptions{
-						Sort:      &sortParam,
-						Direction: &dirParam,
-						ListOptions: github.ListOptions{
-							Page:    pg,
-							PerPage: DEFAULT_PER_PAGE,
-						},
-					},
-				)
-				if err != nil {
-					return
+		done := false
+		for page := 1; !done; page++ {
+			var comments []*github.IssueComment
+			var err error
+			comments, done, err = cfg.Client.ListIssueComments(
+				ctx,
+				f.repo.GetOwner(),
+				f.repo.GetName(),
+				issue.GetNumber(),
+				page,
+			)
+			if err != nil {
+				return nil, err
+			}
+			for _, ghComment := range comments {
+				comment := &IssueComment{
+					Comment: ghComment,
 				}
-				for _, ghComment := range comments {
-					comment := &IssueComment{
-						Comment: ghComment,
-					}
-					if err = comment.Save(f.rootPath, f.repo, issue.GetNumber(), cfg.PrettyJSON); err != nil {
-						return
-					}
+				if err := comment.Save(f.rootPath, f.repo, issue.GetNumber(), cfg.PrettyJSON); err != nil {
+					return nil, err
 				}
-				done = len(comments) < DEFAULT_PER_PAGE
-				return
-			})
-		if err != nil {
-			return nil, err
+			}
 		}
-
 		issue.LastCommentsFetch = time.Now()
 		if err := issue.Save(f.rootPath, f.repo, cfg.PrettyJSON); err != nil {
 			return nil, err

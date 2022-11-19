@@ -96,47 +96,29 @@ func newPullRequestCommentsFetcher(rootPath string, repo *Repository, pullReques
 
 func (cf *pullRequestCommentsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
 	for _, pr := range cf.pullRequests {
-		log.Info("Fetching pull request comments", "repo", cf.repo.String(), "pr", pr.GetNumber())
-		err := rateLimitedPaginated(
-			ctx,
-			1,
-			cfg.RequestRetries,
-			cfg.RequestTimeout,
-			log,
-			func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
-				var comments []*github.PullRequestComment
-				comments, res, err = cfg.Client.PullRequests.ListComments(
-					cx,
-					cf.repo.GetOwner(),
-					cf.repo.GetName(),
-					pr.GetNumber(),
-					&github.PullRequestListCommentsOptions{
-						Sort:      "created",
-						Direction: "asc",
-						ListOptions: github.ListOptions{
-							Page:    pg,
-							PerPage: DEFAULT_PER_PAGE,
-						},
-					},
-				)
-				if err != nil {
-					return
+		var err error
+		done := false
+		for page := 1; !done; page++ {
+			var comments []*github.PullRequestComment
+			comments, done, err = cfg.Client.ListPullRequestComments(
+				ctx,
+				cf.repo.GetOwner(),
+				cf.repo.GetName(),
+				pr.GetNumber(),
+				page,
+			)
+			if err != nil {
+				return nil, err
+			}
+			for _, ghComment := range comments {
+				comment := &PullRequestComment{
+					Comment: ghComment,
 				}
-				for _, ghComment := range comments {
-					comment := &PullRequestComment{
-						Comment: ghComment,
-					}
-					if err = comment.Save(cf.rootPath, cf.repo, pr.GetNumber(), cfg.PrettyJSON); err != nil {
-						return
-					}
+				if err := comment.Save(cf.rootPath, cf.repo, pr.GetNumber(), cfg.PrettyJSON); err != nil {
+					return nil, err
 				}
-				done = len(comments) < DEFAULT_PER_PAGE
-				return
-			})
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch pull request %d comments for repo %s: %v", pr.GetNumber(), cf.repo, err)
+			}
 		}
-
 		pr.LastCommentsFetch = time.Now()
 		if err := pr.Save(cf.rootPath, cf.repo, cfg.PrettyJSON); err != nil {
 			return nil, err
@@ -163,46 +145,30 @@ func newPullRequestReviewCommentsFetcher(rootPath string, repo *Repository, revi
 
 func (cf *pullRequestReviewCommentsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
 	for _, review := range cf.reviews {
-		log.Info("Fetching pull request review comments", "repo", cf.repo.String(), "pr", review.PullRequestNumber, "reviewID", review.Review.GetID())
-		// There shouldn't really be that many review comments on each review,
-		// so fetching them from page 1 should be relatively optimal.
-		err := rateLimitedPaginated(
-			ctx,
-			1,
-			cfg.RequestRetries,
-			cfg.RequestTimeout,
-			log,
-			func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
-				var comments []*github.PullRequestComment
-				comments, res, err = cfg.Client.PullRequests.ListReviewComments(
-					cx,
-					cf.repo.GetOwner(),
-					cf.repo.GetName(),
-					review.PullRequestNumber,
-					review.Review.GetID(),
-					&github.ListOptions{
-						Page:    pg,
-						PerPage: DEFAULT_PER_PAGE,
-					},
-				)
-				if err != nil {
-					return
+		var err error
+		done := false
+		for page := 1; !done; page++ {
+			var comments []*github.PullRequestComment
+			comments, done, err = cfg.Client.ListPullRequestReviewComments(
+				ctx,
+				cf.repo.GetOwner(),
+				cf.repo.GetName(),
+				review.PullRequestNumber,
+				review.Review.GetID(),
+				page,
+			)
+			if err != nil {
+				return nil, err
+			}
+			for _, ghComment := range comments {
+				comment := &PullRequestComment{
+					Comment: ghComment,
 				}
-				for _, ghComment := range comments {
-					comment := &PullRequestComment{
-						Comment: ghComment,
-					}
-					if err = comment.SaveForReview(cf.rootPath, cf.repo, review.PullRequestNumber, review.Review.GetID(), cfg.PrettyJSON); err != nil {
-						return
-					}
+				if err := comment.SaveForReview(cf.rootPath, cf.repo, review.PullRequestNumber, review.Review.GetID(), cfg.PrettyJSON); err != nil {
+					return nil, err
 				}
-				done = len(comments) < DEFAULT_PER_PAGE
-				return
-			})
-		if err != nil {
-			return nil, err
+			}
 		}
-
 		review.LastCommentsFetch = time.Now()
 		if err := review.Save(cf.rootPath, cf.repo, cfg.PrettyJSON); err != nil {
 			return nil, err

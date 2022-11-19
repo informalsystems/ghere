@@ -74,7 +74,6 @@ func newPullRequestsFetcher(rootPath string, repo *Repository) *pullRequestsFetc
 }
 
 func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
-	log.Info("Fetching pull requests for repository", "repo", pf.repo.String())
 	prsPath := repoPullRequestsPath(pf.rootPath, pf.repo.GetOwner(), pf.repo.GetName())
 	pattern := filepath.Join(prsPath, "*", DETAIL_FILENAME)
 	startPage, err := paginatedItemsStartPage(pattern, func(fn string) (bool, error) {
@@ -89,44 +88,25 @@ func (pf *pullRequestsFetcher) fetch(ctx context.Context, cfg *FetchConfig, log 
 	if err != nil {
 		return nil, err
 	}
-	err = rateLimitedPaginated(
-		ctx,
-		startPage,
-		cfg.RequestRetries,
-		cfg.RequestTimeout,
-		log,
-		func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
-			var pulls []*github.PullRequest
-			log.Info("Fetching page of pull requests", "repo", pf.repo.String(), "page", pg)
-			pulls, res, err = cfg.Client.PullRequests.List(cx, pf.repo.GetOwner(), pf.repo.GetName(), &github.PullRequestListOptions{
-				State:     "all",
-				Sort:      "created",
-				Direction: "asc",
-				ListOptions: github.ListOptions{
-					Page:    pg,
-					PerPage: DEFAULT_PER_PAGE,
-				},
-			})
+
+	var pulls []*github.PullRequest
+	done := false
+	for page := startPage; !done; page++ {
+		pulls, done, err = cfg.Client.ListRepositoryPullRequests(ctx, pf.repo.GetOwner(), pf.repo.GetName(), page)
+		if err != nil {
+			return nil, err
+		}
+		for _, ghPull := range pulls {
+			pull, err := LoadPullRequest(pf.rootPath, pf.repo, ghPull.GetNumber(), false)
 			if err != nil {
-				return
+				return nil, err
 			}
-			for _, ghPull := range pulls {
-				var pull *PullRequest
-				pull, err = LoadPullRequest(pf.rootPath, pf.repo, ghPull.GetNumber(), false)
-				if err != nil {
-					return
-				}
-				pull.PullRequest = ghPull
-				pull.LastDetailFetch = time.Now()
-				if err = pull.Save(pf.rootPath, pf.repo, cfg.PrettyJSON); err != nil {
-					return
-				}
+			pull.PullRequest = ghPull
+			pull.LastDetailFetch = time.Now()
+			if err := pull.Save(pf.rootPath, pf.repo, cfg.PrettyJSON); err != nil {
+				return nil, err
 			}
-			done = len(pulls) < DEFAULT_PER_PAGE
-			return
-		})
-	if err != nil {
-		return nil, err
+		}
 	}
 	log.Info("Fetched all pull requests' details", "repo", pf.repo.String())
 

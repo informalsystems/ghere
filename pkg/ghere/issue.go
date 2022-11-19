@@ -67,7 +67,6 @@ func newIssuesFetcher(rootPath string, repo *Repository) *issuesFetcher {
 }
 
 func (f *issuesFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
-	log.Info("Fetching issues for repository", "repo", f.repo.String())
 	issuesPath := repoIssuesPath(f.rootPath, f.repo.GetOwner(), f.repo.GetName())
 	pattern := filepath.Join(issuesPath, "*", DETAIL_FILENAME)
 	startPage, err := paginatedItemsStartPage(pattern, func(fn string) (bool, error) {
@@ -82,49 +81,24 @@ func (f *issuesFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger)
 	if err != nil {
 		return nil, err
 	}
-	err = rateLimitedPaginated(
-		ctx,
-		startPage,
-		cfg.RequestRetries,
-		cfg.RequestTimeout,
-		log,
-		func(cx context.Context, pg int) (res *github.Response, done bool, err error) {
-			var issues []*github.Issue
-			log.Info("Fetching page of issues", "repo", f.repo.String(), "page", pg)
-			issues, res, err = cfg.Client.Issues.ListByRepo(
-				cx,
-				f.repo.GetOwner(),
-				f.repo.GetName(),
-				&github.IssueListByRepoOptions{
-					State:     "all",
-					Sort:      "created",
-					Direction: "asc",
-					ListOptions: github.ListOptions{
-						Page:    pg,
-						PerPage: DEFAULT_PER_PAGE,
-					},
-				},
-			)
+	done := false
+	for page := startPage; !done; page++ {
+		var issues []*github.Issue
+		issues, done, err = cfg.Client.ListRepositoryIssues(ctx, f.repo.GetOwner(), f.repo.GetName(), page)
+		if err != nil {
+			return nil, err
+		}
+		for _, ghIssue := range issues {
+			issue, err := LoadIssue(f.rootPath, f.repo, ghIssue.GetNumber(), false)
 			if err != nil {
-				return
+				return nil, err
 			}
-			for _, ghIssue := range issues {
-				var issue *Issue
-				issue, err = LoadIssue(f.rootPath, f.repo, ghIssue.GetNumber(), false)
-				if err != nil {
-					return
-				}
-				issue.Issue = ghIssue
-				issue.LastDetailFetch = time.Now()
-				if err = issue.Save(f.rootPath, f.repo, cfg.PrettyJSON); err != nil {
-					return
-				}
+			issue.Issue = ghIssue
+			issue.LastDetailFetch = time.Now()
+			if err := issue.Save(f.rootPath, f.repo, cfg.PrettyJSON); err != nil {
+				return nil, err
 			}
-			done = len(issues) < DEFAULT_PER_PAGE
-			return
-		})
-	if err != nil {
-		return nil, err
+		}
 	}
 	log.Info("Fetched all issues' details", "repo", f.repo.String())
 

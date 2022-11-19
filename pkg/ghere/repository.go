@@ -102,16 +102,7 @@ func (rf *repoFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) 
 	if err != nil {
 		return nil, err
 	}
-	log.Info("Fetching repository details", "repo", fmt.Sprintf("%s/%s", rf.owner, rf.name))
-	err = rateLimited(
-		ctx,
-		cfg.RequestRetries,
-		cfg.RequestTimeout,
-		log,
-		func(cx context.Context) (res *github.Response, err error) {
-			rf.repo.Repository, res, err = cfg.Client.Repositories.Get(cx, rf.owner, rf.name)
-			return
-		})
+	rf.repo.Repository, err = cfg.Client.GetRepository(ctx, rf.owner, rf.name)
 	if err != nil {
 		return nil, err
 	}
