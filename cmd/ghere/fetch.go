@@ -16,11 +16,12 @@ import (
 type fetchCmd struct {
 	*cobra.Command
 
-	privKeyFile string
-	reqRetries  uint
-	reqTimeout  uint
-	gitTimeout  uint
-	pretty      bool
+	privKeyFile    string
+	githubUsername string
+	reqRetries     uint
+	reqTimeout     uint
+	gitTimeout     uint
+	pretty         bool
 }
 
 func newFetchCmd(root *rootCmd) *fetchCmd {
@@ -48,8 +49,6 @@ func newFetchCmd(root *rootCmd) *fetchCmd {
 				return errors.New("missing GITHUB_TOKEN environment variable")
 			}
 
-			sshPrivKeyPassword := os.Getenv("SSH_PRIVKEY_PASSWORD")
-
 			log.Info("Loading local collection", "path", root.configFile)
 			coll, err := ghere.LoadOrCreateLocalCollection(root.configFile)
 			if err != nil {
@@ -66,11 +65,11 @@ func newFetchCmd(root *rootCmd) *fetchCmd {
 			reqRetries := int(cmd.reqRetries)
 			reqTimeout := time.Duration(cmd.reqTimeout) * time.Second
 			cfg := &ghere.FetchConfig{
-				Client:                 ghere.NewGitHubClient(client, reqRetries, reqTimeout, log),
-				SSHPrivKeyFile:         cmd.privKeyFile,
-				SSHPrivKeyFilePassword: sshPrivKeyPassword,
-				GitTimeout:             time.Duration(cmd.gitTimeout) * time.Second,
-				PrettyJSON:             cmd.pretty,
+				Client:             ghere.NewGitHubClient(client, reqRetries, reqTimeout, log),
+				CredentialProvider: ghere.NewGitHubEnvVarCredentialProvider(cmd.privKeyFile, cmd.githubUsername),
+				RepoUpdater:        ghere.NewGitHubRepositoryUpdater(),
+				GitTimeout:         time.Duration(cmd.gitTimeout) * time.Second,
+				PrettyJSON:         cmd.pretty,
 			}
 			if err := coll.Fetch(c.Context(), cfg, log); err != nil {
 				log.Error("Failed to sync from GitHub", "err", err)
@@ -85,6 +84,7 @@ func newFetchCmd(root *rootCmd) *fetchCmd {
 	}
 	defaultPrivKeyPath := filepath.Join(homeDir, ".ssh", "id_rsa")
 	cmd.Flags().StringVar(&cmd.privKeyFile, "priv-key", defaultPrivKeyPath, "path to the private key to use to clone Git repositories")
+	cmd.Flags().StringVar(&cmd.githubUsername, "login", "", "GitHub username to use when attempting to clone repositories via HTTPS")
 	cmd.Flags().UintVar(&cmd.reqRetries, "request-retries", 3, "how many times to retry requests to GitHub that timeout")
 	cmd.Flags().UintVar(&cmd.reqTimeout, "request-timeout", 20, "timeout, in seconds, for each HTTP request")
 	cmd.Flags().UintVar(&cmd.gitTimeout, "git-timeout", 120, "timeout, in seconds, for each Git repository clone/pull operation")

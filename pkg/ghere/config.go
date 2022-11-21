@@ -12,9 +12,9 @@ const (
 
 // FetchConfig provides our configuration for all fetch operations.
 type FetchConfig struct {
-	Client                 GitHubClient
-	SSHPrivKeyFile         string
-	SSHPrivKeyFilePassword string
-	GitTimeout             time.Duration
-	PrettyJSON             bool
+	Client             GitHubClient
+	CredentialProvider GitHubCredentialProvider
+	RepoUpdater        GitHubRepositoryUpdater
+	GitTimeout         time.Duration
+	PrettyJSON         bool
 }

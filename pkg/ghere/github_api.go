@@ -60,7 +60,7 @@ func (c *githubClient) GetRepository(ctx context.Context, owner, name string) (*
 
 func (c *githubClient) ListRepositoryLabels(ctx context.Context, owner, name string, page int) ([]*github.Label, bool, error) {
 	var labels []*github.Label
-	c.log.Info("List repository labels", "repo", owner+"/"+name, name, "page", page)
+	c.log.Info("List repository labels", "repo", owner+"/"+name, "page", page)
 	err := c.callRateLimited(ctx, func(cx context.Context) (res *github.Response, err error) {
 		labels, res, err = c.client.Issues.ListLabels(cx, owner, name, &github.ListOptions{
 			Page:    page,
