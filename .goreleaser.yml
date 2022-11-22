@@ -1,0 +1,29 @@
+project_name: ghere
+
+env:
+  # Require use of Go modules.
+  - GO111MODULE=on
+
+builds:
+  - id: "ghere"
+    main: ./cmd/ghere/main.go
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+
+checksum:
+  name_template: SHA256SUMS-{{.Version}}.txt
+  algorithm: sha256
+
+release:
+  prerelease: auto
+  name_template: "{{.Version}}"
+
+archives:
+  - files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
