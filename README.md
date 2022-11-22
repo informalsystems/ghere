@@ -3,8 +3,6 @@
 GitHub repos, with issues, pull requests and comments, over _here_, on my local
 machine. Pronounced "gear".
 
-**NB: This is still a work-in-progress. Please expect substantial changes.**
-
 ## Requirements
 
 * Go 1.19+
