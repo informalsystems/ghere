@@ -1,7 +1,7 @@
 BUILD_DIR?=$(CURDIR)/build
 BIN?=$(BUILD_DIR)/ghere
 
-all: build test
+all: lint build test
 .PHONY: all
 
 build:
