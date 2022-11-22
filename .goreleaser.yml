@@ -6,7 +6,7 @@ env:
 
 builds:
   - id: "ghere"
-    main: ./cmd/ghere/main.go
+    main: ./cmd/ghere/
     goos:
       - darwin
       - linux
