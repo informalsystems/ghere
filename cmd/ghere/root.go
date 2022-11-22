@@ -52,5 +52,6 @@ machine. Pronounced "gear".`,
 
 	r.fetch = newFetchCmd(r)
 	r.AddCommand(r.fetch.Command)
+	r.AddCommand(newVersionCmd())
 	return r
 }
