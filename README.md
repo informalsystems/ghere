@@ -1,5 +1,9 @@
 # ghere
 
+[![Build](https://github.com/informalsystems/ghere/actions/workflows/build.yml/badge.svg)](https://github.com/informalsystems/ghere/actions/workflows/build.yml)
+[![Linter](https://github.com/informalsystems/ghere/actions/workflows/lint.yml/badge.svg)](https://github.com/informalsystems/ghere/actions/workflows/lint.yml)
+[![Test](https://github.com/informalsystems/ghere/actions/workflows/tests.yml/badge.svg)](https://github.com/informalsystems/ghere/actions/workflows/tests.yml)
+
 GitHub repos, with issues, pull requests and comments, over _here_, on my local
 machine. Pronounced "gear".
 
