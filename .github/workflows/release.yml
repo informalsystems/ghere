@@ -25,7 +25,10 @@ jobs:
           version: latest
           args: build --skip-validate   # skip validate skips initial sanity checks in order to be able to fully run
 
-      - run: echo https://github.com/informalsystems/ghere/blob/${GITHUB_REF#refs/tags/}/CHANGELOG.md#${${GITHUB_REF#refs/tags/}//./} > ../release_notes.md
+      - run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          HEADING=${VERSION//./}
+          echo https://github.com/informalsystems/ghere/blob/${VERSION}/CHANGELOG.md#${HEADING} > ../release_notes.md
 
       - name: Release
         uses: goreleaser/goreleaser-action@v3
