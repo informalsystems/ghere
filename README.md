@@ -1,5 +1,6 @@
 # ghere
 
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/informalsystems/ghere)
 [![Build](https://github.com/informalsystems/ghere/actions/workflows/build.yml/badge.svg)](https://github.com/informalsystems/ghere/actions/workflows/build.yml)
 [![Linter](https://github.com/informalsystems/ghere/actions/workflows/lint.yml/badge.svg)](https://github.com/informalsystems/ghere/actions/workflows/lint.yml)
 [![Test](https://github.com/informalsystems/ghere/actions/workflows/tests.yml/badge.svg)](https://github.com/informalsystems/ghere/actions/workflows/tests.yml)
