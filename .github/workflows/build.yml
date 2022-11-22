@@ -1,0 +1,19 @@
+# To run locally, run `make build` from the root of the repo.
+name: Build
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v3
+        with:
+          go-version: "1.19"
+      - uses: actions/checkout@v3
+      - name: build
+        run: make build
