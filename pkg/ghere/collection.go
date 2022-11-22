@@ -10,7 +10,7 @@ import (
 // LocalCollection captures information about, and facilitates access to, local
 // copies of GitHub repositories.
 type LocalCollection struct {
-	// Repositories is a list of specific repositories to synchronize locally.
+	// Repositories is a list of specific repositories to fetch locally.
 	Repositories []*LocalRepository `json:"repositories"`
 
 	configFile string `json:"-"`

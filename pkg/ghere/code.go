@@ -2,7 +2,6 @@ package ghere
 
 import (
 	"context"
-	"fmt"
 )
 
 type codeFetcher struct {
@@ -20,12 +19,8 @@ func newCodeFetcher(rootPath string, repo *Repository) *codeFetcher {
 }
 
 func (cf *codeFetcher) fetch(ctx context.Context, cfg *FetchConfig, log Logger) ([]fetcher, error) {
-	repo := cf.repo.Repository
-	if len(repo.GetSSHURL()) == 0 {
-		return nil, fmt.Errorf("repository %s is missing its SSH URL", repo)
-	}
 	codePath := repoCodePath(cf.rootPath, cf.repo.GetOwner(), cf.repo.GetName())
-	if err := cfg.RepoUpdater.CloneOrUpdateRepository(ctx, codePath, repo, cfg.CredentialProvider, log); err != nil {
+	if err := cfg.RepoUpdater.CloneOrUpdateRepository(ctx, codePath, cf.repo.Repository, cfg.CredentialProvider, log); err != nil {
 		return nil, err
 	}
 	return nil, nil
