@@ -59,7 +59,7 @@ ghere fetch -v --pretty
   access token privileges)
 - [x] Fetch code (Git repository)
   - [x] Fetch code via SSH with SSH key support
-  - [ ] Fetch code via HTTPS
+  - [x] Fetch code via HTTPS
 - [x] Fetch issues
   - [x] Fetch issue comments
 - [x] Fetch pull requests
