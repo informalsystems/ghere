@@ -1,5 +1,5 @@
 # To run locally, run `make lint` from the root of the repo.
-name: Golang Linter
+name: Linter
 
 on:
   pull_request:
