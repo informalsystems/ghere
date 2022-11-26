@@ -5,14 +5,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newAddCmd(root *rootCmd) *cobra.Command {
-	return &cobra.Command{
+type addCmd struct {
+	*cobra.Command
+
+	warnOnExists bool
+}
+
+func newAddCmd(root *rootCmd) *addCmd {
+	cmd := &addCmd{}
+	cmd.Command = &cobra.Command{
 		Use:   "add path [path ...]",
 		Short: "Add one or more repositories to a local collection",
 		Example: `  # Add the repository https://github.com/myorg/repo1 to a local collection
   ghere add myorg/repo1`,
 		Args: cobra.MinimumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(c *cobra.Command, args []string) error {
 			log := root.logger
 			log.Info("Loading local collection", "path", root.configFile)
 			coll, err := ghere.LoadOrCreateLocalCollection(root.configFile)
@@ -23,6 +30,12 @@ func newAddCmd(root *rootCmd) *cobra.Command {
 			for _, arg := range args {
 				_, err := coll.NewFromPath(arg)
 				if err != nil {
+					if e, ok := err.(*ghere.ErrRepositoryAlreadyExists); ok {
+						if cmd.warnOnExists {
+							log.Warn("Repository already exists, skipping", "owner", e.Owner, "name", e.Name)
+							continue
+						}
+					}
 					log.Error("Failed to create repository", "err", err)
 					return err
 				}
@@ -35,4 +48,6 @@ func newAddCmd(root *rootCmd) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.PersistentFlags().BoolVar(&cmd.warnOnExists, "warn-on-exists", false, "only warn if a repository already exists instead of exiting with an error")
+	return cmd
 }

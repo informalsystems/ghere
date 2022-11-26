@@ -10,6 +10,7 @@ type rootCmd struct {
 
 	configFile string
 	verbose    bool
+	add        *addCmd
 	fetch      *fetchCmd
 
 	logger ghere.Logger
@@ -48,10 +49,13 @@ machine. Pronounced "gear".`,
 	}
 
 	r.AddCommand(newInitCmd(r))
-	r.AddCommand(newAddCmd(r))
+
+	r.add = newAddCmd(r)
+	r.AddCommand(r.add.Command)
 
 	r.fetch = newFetchCmd(r)
 	r.AddCommand(r.fetch.Command)
+
 	r.AddCommand(newVersionCmd())
 	return r
 }

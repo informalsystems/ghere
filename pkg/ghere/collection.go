@@ -56,7 +56,7 @@ func (c *LocalCollection) NewFromPath(path string) (*LocalRepository, error) {
 	}
 	for _, repo := range c.Repositories {
 		if repo.Owner == parts[0] && repo.Name == parts[1] {
-			return nil, fmt.Errorf("repository already exists in collection: %s/%s", repo.Owner, repo.Name)
+			return nil, &ErrRepositoryAlreadyExists{Owner: repo.Owner, Name: repo.Name}
 		}
 	}
 	repo := &LocalRepository{
