@@ -42,6 +42,11 @@ ghere init
 # this point - just adds it to the local collection.
 ghere add org/repo
 
+# The --warn-on-exists flag will only generate a warning if a repository already
+# exists in the collection, as opposed to the default behavior which is to exit
+# with an error.
+ghere add --warn-on-exists org/repo
+
 # Fetch the code, metadata, plus all latest issues, pull requests and comments
 # for all configured repositories. By default, this does not output pretty JSON.
 ghere fetch
