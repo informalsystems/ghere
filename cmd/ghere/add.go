@@ -8,7 +8,7 @@ import (
 type addCmd struct {
 	*cobra.Command
 
-	warnOnExists bool
+	failOnExists bool
 }
 
 func newAddCmd(root *rootCmd) *addCmd {
@@ -31,8 +31,8 @@ func newAddCmd(root *rootCmd) *addCmd {
 				_, err := coll.NewFromPath(arg)
 				if err != nil {
 					if e, ok := err.(*ghere.ErrRepositoryAlreadyExists); ok {
-						if cmd.warnOnExists {
-							log.Warn("Repository already exists, skipping", "owner", e.Owner, "name", e.Name)
+						if !cmd.failOnExists {
+							log.Info("Repository already exists, skipping", "owner", e.Owner, "name", e.Name)
 							continue
 						}
 					}
@@ -48,6 +48,6 @@ func newAddCmd(root *rootCmd) *addCmd {
 			return nil
 		},
 	}
-	cmd.PersistentFlags().BoolVar(&cmd.warnOnExists, "warn-on-exists", false, "only warn if a repository already exists instead of exiting with an error")
+	cmd.Flags().BoolVar(&cmd.failOnExists, "fail-on-exists", false, "exit with an error if a repository already exists instead of simply providing a warning")
 	return cmd
 }

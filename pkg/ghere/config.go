@@ -16,5 +16,6 @@ type FetchConfig struct {
 	CredentialProvider GitHubCredentialProvider
 	RepoUpdater        GitHubRepositoryUpdater
 	GitTimeout         time.Duration
+	FailFast           bool
 	PrettyJSON         bool
 }

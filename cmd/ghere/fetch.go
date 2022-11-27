@@ -22,6 +22,7 @@ type fetchCmd struct {
 	reqTimeout     uint
 	gitTimeout     uint
 	pretty         bool
+	failFast       bool
 }
 
 func newFetchCmd(root *rootCmd) *fetchCmd {
@@ -69,6 +70,7 @@ func newFetchCmd(root *rootCmd) *fetchCmd {
 				CredentialProvider: ghere.NewGitHubEnvVarCredentialProvider(cmd.privKeyFile, cmd.githubUsername),
 				RepoUpdater:        ghere.NewGitHubRepositoryUpdater(),
 				GitTimeout:         time.Duration(cmd.gitTimeout) * time.Second,
+				FailFast:           cmd.failFast,
 				PrettyJSON:         cmd.pretty,
 			}
 			if err := coll.Fetch(c.Context(), cfg, log); err != nil {
@@ -89,5 +91,6 @@ func newFetchCmd(root *rootCmd) *fetchCmd {
 	cmd.Flags().UintVar(&cmd.reqTimeout, "request-timeout", 20, "timeout, in seconds, for each HTTP request")
 	cmd.Flags().UintVar(&cmd.gitTimeout, "git-timeout", 120, "timeout, in seconds, for each Git repository clone/pull operation")
 	cmd.Flags().BoolVar(&cmd.pretty, "pretty", false, "output pretty JSON instead of compact JSON")
+	cmd.Flags().BoolVar(&cmd.failFast, "fail-fast", false, "fail the moment an error is encountered in fetching a repository instead of attempting to continue with the next one")
 	return cmd
 }

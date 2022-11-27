@@ -39,13 +39,13 @@ See `ghere --help` for details.
 ghere init
 
 # Add a local copy of https://github.com/org/repo. Does not sync anything at
-# this point - just adds it to the local collection.
+# this point - just adds it to the local collection. Idempotent.
 ghere add org/repo
 
-# The --warn-on-exists flag will only generate a warning if a repository already
-# exists in the collection, as opposed to the default behavior which is to exit
-# with an error.
-ghere add --warn-on-exists org/repo
+# The --fail-on-exists flag will cause ghere to exit with an error if the
+# repository already exists in the collection, as opposed to its default
+# behavior of notifying.
+ghere add --fail-on-exists org/repo
 
 # Fetch the code, metadata, plus all latest issues, pull requests and comments
 # for all configured repositories. By default, this does not output pretty JSON.

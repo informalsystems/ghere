@@ -68,11 +68,18 @@ func (c *LocalCollection) NewFromPath(path string) (*LocalRepository, error) {
 }
 
 func (c *LocalCollection) Fetch(ctx context.Context, cfg *FetchConfig, log Logger) error {
-	fetchers := []fetcher{}
+	var err error
 	for _, repo := range c.Repositories {
-		fetchers = append(fetchers, newRepoFetcher(c.rootPath, repo.Owner, repo.Name))
+		f := newRepoFetcher(c.rootPath, repo.Owner, repo.Name)
+		if e := fetchRecursively(ctx, cfg, []fetcher{f}, log); e != nil {
+			if cfg.FailFast {
+				return e
+			}
+			log.Error("Failed to completely fetch repository", "repo", repo.Owner+"/"+repo.Name, "err", e)
+			err = e
+		}
 	}
-	return fetchRecursively(ctx, cfg, fetchers, log)
+	return err
 }
 
 type LocalRepository struct {
